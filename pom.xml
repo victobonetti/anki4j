@@ -10,7 +10,7 @@
   <version>0.0.1</version>
 
   <name>anki4j</name>
-  <url>https://github.com/vbo/poweranki</url>
+  <url>https://github.com/victobonetti/anki4j</url>
 
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
