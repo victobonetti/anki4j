@@ -50,6 +50,19 @@ public class Card implements Serializable {
         this.ordinal = ordinal;
     }
 
+    private transient com.anki4j.Anki4j context;
+
+    public void setContext(com.anki4j.Anki4j context) {
+        this.context = context;
+    }
+
+    public Note getNote() {
+        if (context == null) {
+            throw new IllegalStateException("Anki4j context not set on this Card. Cannot lazy load note.");
+        }
+        return context.getNote(this.noteId);
+    }
+
     @Override
     public String toString() {
         return "Card{id=" + id + ", noteId=" + noteId + ", deckId=" + deckId + ", ordinal=" + ordinal + "}";

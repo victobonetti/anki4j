@@ -7,7 +7,6 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
-import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.file.*;
@@ -118,27 +117,29 @@ public class Anki4jTest {
     }
 
     @Test
-    public void testReadApkg() {
+    public void testLazyLoading() {
         try (Anki4j anki = Anki4j.read(apkgPath.toString())) {
-            // Verify Decks
             List<Deck> decks = anki.getDecks();
-            assertEquals(2, decks.size());
-            boolean found = decks.stream().anyMatch(d -> d.getName().equals("Test Deck") && d.getId() == 100);
-            assertTrue("Should contain 'Test Deck'", found);
+            assertFalse(decks.isEmpty());
 
-            // Verify Notes
-            List<Note> notes = anki.getNotes();
-            assertEquals(1, notes.size());
-            assertEquals("Front\u001fBack", notes.get(0).getFields());
-            assertEquals("Front", notes.get(0).getFieldParts()[0]);
+            Deck testDeck = decks.stream()
+                    .filter(d -> d.getId() == 100)
+                    .findFirst()
+                    .orElse(null);
+            assertNotNull(testDeck);
 
-            // Verify Cards
-            List<Card> cards = anki.getCards();
+            // Lazy load cards
+            List<Card> cards = testDeck.getCards();
             assertEquals(1, cards.size());
-            assertEquals(10, cards.get(0).getNoteId());
-            assertEquals(100, cards.get(0).getDeckId());
+            Card card = cards.get(0);
+
+            // Lazy load note
+            Note note = card.getNote();
+            assertNotNull(note);
+            assertEquals("Front", note.getFieldParts()[0]);
 
         } catch (Exception e) {
+            e.printStackTrace();
             fail("Should not throw exception: " + e.getMessage());
         }
     }

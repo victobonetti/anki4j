@@ -107,7 +107,9 @@ public class Anki4j implements AutoCloseable {
             if (decksTableExists) {
                 try (ResultSet rs = stmt.executeQuery("SELECT id, name FROM decks")) {
                     while (rs.next()) {
-                        decks.add(new Deck(rs.getLong("id"), rs.getString("name")));
+                        Deck d = new Deck(rs.getLong("id"), rs.getString("name"));
+                        d.setContext(this);
+                        decks.add(d);
                     }
                 }
             } else {
@@ -126,7 +128,9 @@ public class Anki4j implements AutoCloseable {
                                     // Example: "1": {"name": "Default", ...}
                                     long id = Long.parseLong(field.getKey());
                                     String name = field.getValue().get("name").asText();
-                                    decks.add(new Deck(id, name));
+                                    Deck d = new Deck(id, name);
+                                    d.setContext(this);
+                                    decks.add(d);
                                 }
                             } catch (Exception e) {
                                 throw new AnkiException("Failed to parse decks JSON from col table", e);
@@ -142,16 +146,30 @@ public class Anki4j implements AutoCloseable {
     }
 
     public List<Card> getCards() {
+        return getCards(-1); // -1 means all
+    }
+
+    public List<Card> getCards(long deckId) {
         List<Card> cards = new ArrayList<>();
         String sql = "SELECT id, nid, did, ord FROM cards";
-        try (Statement stmt = connection.createStatement();
-                ResultSet rs = stmt.executeQuery(sql)) {
-            while (rs.next()) {
-                cards.add(new Card(
-                        rs.getLong("id"),
-                        rs.getLong("nid"),
-                        rs.getLong("did"),
-                        rs.getLong("ord")));
+        if (deckId != -1) {
+            sql += " WHERE did = ?";
+        }
+
+        try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+            if (deckId != -1) {
+                stmt.setLong(1, deckId);
+            }
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    Card c = new Card(
+                            rs.getLong("id"),
+                            rs.getLong("nid"),
+                            rs.getLong("did"),
+                            rs.getLong("ord"));
+                    c.setContext(this);
+                    cards.add(c);
+                }
             }
         } catch (SQLException e) {
             throw new AnkiException("Failed to query cards", e);
@@ -161,15 +179,6 @@ public class Anki4j implements AutoCloseable {
 
     public List<Note> getNotes() {
         List<Note> notes = new ArrayList<>();
-        // "Join between cards and notes to extract questions and answers" - Prompt
-        // Actually, notes are independent entities. The Prompt says "Join entre as
-        // tabelas cards e notes para extrair perguntas e respostas".
-        // This implies a method that returns something like 'Flashcard' (Q&A).
-        // But the requirements asked for a POJO `Note`. Let's assume this method
-        // returns raw Notes
-        // and we might add a helper for Q&A later or in a different method.
-        // Let's just return Notes for now as per `getNotes`.
-
         String sql = "SELECT id, guid, flds, mid FROM notes";
         try (Statement stmt = connection.createStatement();
                 ResultSet rs = stmt.executeQuery(sql)) {
@@ -184,6 +193,26 @@ public class Anki4j implements AutoCloseable {
             throw new AnkiException("Failed to query notes", e);
         }
         return notes;
+    }
+
+    public Note getNote(long noteId) {
+        String sql = "SELECT id, guid, flds, mid FROM notes WHERE id = ?";
+        try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+            stmt.setLong(1, noteId);
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    return new Note(
+                            rs.getLong("id"),
+                            rs.getString("guid"),
+                            rs.getString("flds"),
+                            rs.getLong("mid"));
+                }
+            }
+        } catch (SQLException e) {
+            throw new AnkiException("Failed to query note by id: " + noteId, e);
+        }
+        return null; // Or throw exception if not found, usually null is safer for lazy loading
+                     // integration
     }
 
     // Helper to join cards and notes if needed
