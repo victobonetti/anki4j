@@ -85,6 +85,38 @@ public class Anki4jTest {
         }
     }
 
+    private void createLegacyApkg() throws Exception {
+        // 1. Create a temporary SQLite DB (LEGACY: No 'decks' table, data in 'col')
+        Path dbPath = tempTestDir.resolve("collection.anki2");
+        Files.deleteIfExists(dbPath); // Delete the one created by setUp()
+
+        String url = "jdbc:sqlite:" + dbPath.toAbsolutePath();
+
+        try (Connection conn = DriverManager.getConnection(url);
+                Statement stmt = conn.createStatement()) {
+
+            // Create tables
+            stmt.execute("CREATE TABLE col (id INTEGER PRIMARY KEY, decks TEXT)");
+            stmt.execute(
+                    "CREATE TABLE notes (id INTEGER PRIMARY KEY, guid TEXT, mid INTEGER, mod INTEGER, usn INTEGER, tags TEXT, flds TEXT, sfld INTEGER, csum INTEGER, flags INTEGER, data TEXT)");
+            stmt.execute(
+                    "CREATE TABLE cards (id INTEGER PRIMARY KEY, nid INTEGER, did INTEGER, ord INTEGER, mod INTEGER, usn INTEGER, type INTEGER, queue INTEGER, due INTEGER, ivl INTEGER, factor INTEGER, reps INTEGER, lapses INTEGER, left INTEGER, odue INTEGER, odid INTEGER, flags INTEGER, data TEXT)");
+
+            // Insert data with JSON in 'col.decks'
+            String decksJson = "{\"1\": {\"name\": \"Default\", \"id\": 1}, \"200\": {\"name\": \"Legacy Deck\", \"id\": 200}}";
+            stmt.execute("INSERT INTO col (id, decks) VALUES (1, '" + decksJson + "')");
+        }
+
+        // 2. Zip it into .apkg
+        apkgPath = tempTestDir.resolve("legacy.apkg");
+        try (ZipOutputStream zos = new ZipOutputStream(new FileOutputStream(apkgPath.toFile()))) {
+            ZipEntry entry = new ZipEntry("collection.anki2");
+            zos.putNextEntry(entry);
+            Files.copy(dbPath, zos);
+            zos.closeEntry();
+        }
+    }
+
     @Test
     public void testReadApkg() {
         try (Anki4j anki = Anki4j.read(apkgPath.toString())) {
@@ -108,6 +140,19 @@ public class Anki4jTest {
 
         } catch (Exception e) {
             fail("Should not throw exception: " + e.getMessage());
+        }
+    }
+
+    @Test
+    public void testReadLegacyDecks() throws Exception {
+        createLegacyApkg();
+        try (Anki4j anki = Anki4j.read(apkgPath.toString())) {
+            // Verify Decks from JSON
+            List<Deck> decks = anki.getDecks();
+            assertEquals(2, decks.size());
+            boolean found = decks.stream().anyMatch(d -> d.getName().equals("Legacy Deck") && d.getId() == 200);
+            assertTrue("Should contain 'Legacy Deck' parsed from JSON", found);
+            assertTrue("Should contain 'Default'", decks.stream().anyMatch(d -> d.getName().equals("Default")));
         }
     }
 }

@@ -5,6 +5,9 @@ import com.anki4j.model.Card;
 import com.anki4j.model.Deck;
 import com.anki4j.model.Note;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import java.io.IOException;
 import java.nio.file.*;
 import java.nio.file.attribute.BasicFileAttributes;
@@ -14,15 +17,19 @@ import java.util.List;
 import java.util.UUID;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
+import java.util.Iterator;
+import java.util.Map;
 
 public class Anki4j implements AutoCloseable {
 
     private final Path tempDir;
     private final Connection connection;
+    private final ObjectMapper objectMapper;
 
     private Anki4j(Path tempDir, Connection connection) {
         this.tempDir = tempDir;
         this.connection = connection;
+        this.objectMapper = new ObjectMapper();
     }
 
     public static Anki4j read(String path) {
@@ -88,12 +95,6 @@ public class Anki4j implements AutoCloseable {
         // json.
         // We will try querying the 'decks' table first (newer structure), if fails, try
         // fallback.
-        // Simplified approach for Phase 1: Try reading from 'decks' table if exists, or
-        // basic fallback.
-        // Note: Actual logic for parsing 'col' table JSON is complex without a JSON
-        // library.
-        // We will implement the requirement: "SELECT id, name FROM decks" and treat
-        // fallback.
 
         try (Statement stmt = connection.createStatement()) {
             boolean decksTableExists = false;
@@ -110,28 +111,27 @@ public class Anki4j implements AutoCloseable {
                     }
                 }
             } else {
-                // Fallback: In older Anki versions, decks are in the 'col' table.
-                // Since we are avoiding complex JSON parsing dependencies for now (pure Java),
-                // we might not fully support this without a JSON parser.
-                // However, for this task, the prompt specifically asked to "implement the
-                // fallback if decks table doesn't exist".
-                // Without a JSON lib, we can't robustly parse the 'col' table 'decks' column.
-                // For Phase 1, we will throw a specific exception or return empty if not found,
-                // OR do a very rudimentary regex extract if absolutely necessary.
-                // Given constraints, let's log or simply return empty for now, assuming newer
-                // .apkg format or user will add JSON lib later.
-                // But wait, user asked to "treat the fallback".
-                // Let's try to extract from `select decks from col`.
-
-                // Attempt rudimentary parsing
+                // Fallback: In older Anki versions, decks are in the 'col' table as a JSON
+                // string.
                 try (ResultSet rs = stmt.executeQuery("SELECT decks FROM col LIMIT 1")) {
                     if (rs.next()) {
                         String json = rs.getString("decks");
-                        // This is a big JSON object. "1": {"name": "Default", ...}
-                        // We won't implement a full JSON parser here.
-                        // Check if we can just warn.
-                        System.err.println(
-                                "Warning: 'decks' table not found. parsing 'col.decks' JSON is required but not fully implemented in pure Java mode without libs.");
+                        if (json != null && !json.isEmpty()) {
+                            try {
+                                JsonNode root = objectMapper.readTree(json);
+                                Iterator<Map.Entry<String, JsonNode>> fields = root.fields();
+                                while (fields.hasNext()) {
+                                    Map.Entry<String, JsonNode> field = fields.next();
+                                    // The key is the deck ID, the value is an object containing "name"
+                                    // Example: "1": {"name": "Default", ...}
+                                    long id = Long.parseLong(field.getKey());
+                                    String name = field.getValue().get("name").asText();
+                                    decks.add(new Deck(id, name));
+                                }
+                            } catch (Exception e) {
+                                throw new AnkiException("Failed to parse decks JSON from col table", e);
+                            }
+                        }
                     }
                 }
             }
@@ -199,7 +199,7 @@ public class Anki4j implements AutoCloseable {
                 connection.close();
             }
         } catch (SQLException e) {
-            // Log or ignore
+            System.err.println("Failed to close database connection: " + e.getMessage());
         }
 
         silentDeleteDir(tempDir);
