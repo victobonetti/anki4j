@@ -76,6 +76,28 @@ note.getModel().ifPresent(model -> {
 });
 ```
 
+## ✍️ Editing and Persistence
+
+Anki4j allows you to modify note fields and persist them back to the original `.apkg` file.
+
+```java
+try (AnkiCollection anki = AnkiCollection.read("my-deck.apkg")) {
+    Note note = anki.getNote(12345).get();
+    
+    // Use getFieldsMap() for easy name-based editing
+    NoteFieldsMap fields = note.getFieldsMap();
+    fields.set("Front", "Updated Question");
+    fields.set("Back", "Updated Answer");
+    
+    // Save the changes to the internal database
+    anki.save(note);
+    
+} // The .apkg file is updated automatically when 'close()' is called
+```
+
+> [!WARNING]
+> The `.apkg` file is only overwritten on `close()` if `anki.save(note)` was called. Changes are initially applied to a temporary database.
+
 ## API Reference
 
 ### AnkiCollection (Interface)
@@ -91,6 +113,7 @@ note.getModel().ifPresent(model -> {
 | `getModel(long id)` | `Optional<Model>` | Model by ID |
 | `getMediaContent(String name)` | `Optional<byte[]>` | Media file bytes |
 | `renderCard(Card card)` | `Optional<RenderedCard>` | Rendered card content |
+| `save(Note note)` | `void` | Marks a note for persistence |
 
 ### Domain Objects
 
@@ -101,7 +124,7 @@ note.getModel().ifPresent(model -> {
 - `getId()`, `getNoteId()`, `getDeckId()`, `getOrdinal()`, `getNote()` (lazy-loaded)
 
 **Note** - Core data entry
-- `getId()`, `getGuid()`, `getModelId()`, `getFields()`, `getMediaReferences()`
+- `getId()`, `getGuid()`, `getModelId()`, `getFields()`, `getFieldsMap()`, `getMediaReferences()`
 
 **Model** - Note type schema
 - `getId()`, `getName()`, `getFlds()`, `getTmpls()`, `getCss()`

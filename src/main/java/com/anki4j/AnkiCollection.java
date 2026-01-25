@@ -33,5 +33,7 @@ public sealed interface AnkiCollection extends AutoCloseable permits Anki4j {
 
     Optional<RenderedCard> renderCard(Card card);
 
+    void save(Note note);
+
     void close();
 }

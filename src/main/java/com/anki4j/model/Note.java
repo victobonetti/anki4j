@@ -63,6 +63,22 @@ public class Note implements Serializable {
         return context.getModel(this.modelId);
     }
 
+    private transient NoteFieldsMap fieldsMap;
+
+    public NoteFieldsMap getFieldsMap() {
+        if (fieldsMap == null) {
+            Model model = getModel().orElseThrow(() -> new IllegalStateException("Model not found for this Note."));
+            fieldsMap = new NoteFieldsMap(model, fields);
+        }
+        return fieldsMap;
+    }
+
+    /** Internal use for persistence */
+    public void _setRawFields(String fields) {
+        this.fields = fields;
+        this.fieldsMap = null; // Invalidate map if raw string changes
+    }
+
     public java.util.List<String> getMediaReferences() {
         java.util.List<String> media = new java.util.ArrayList<>();
         if (fields == null)

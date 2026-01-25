@@ -11,6 +11,7 @@ import com.anki4j.renderer.RenderedCard;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.*;
@@ -18,17 +19,20 @@ import java.nio.file.attribute.BasicFileAttributes;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
+import java.util.Enumeration;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
+import java.util.zip.ZipOutputStream;
 
 public final class Anki4j implements AnkiCollection {
 
     private static final Logger logger = LoggerFactory.getLogger(Anki4j.class);
 
     // Resource handles
+    private final Path originalPath;
     private final Path tempDir;
     private final Connection connection;
     private final ZipFile zipFile;
@@ -40,11 +44,16 @@ public final class Anki4j implements AnkiCollection {
     private final ModelService modelService;
     private final MediaManager mediaManager;
     private final RenderService renderService;
+    private final AnkiWriter ankiWriter;
 
-    private Anki4j(Path tempDir, Connection connection, ZipFile zipFile,
+    private boolean dirty = false;
+
+    private Anki4j(Path originalPath, Path tempDir, Connection connection, ZipFile zipFile,
             DeckRepository deckRepository, CardRepository cardRepository,
             NoteRepository noteRepository, ModelService modelService,
-            MediaManager mediaManager, RenderService renderService) {
+            MediaManager mediaManager, RenderService renderService,
+            AnkiWriter ankiWriter) {
+        this.originalPath = originalPath;
         this.tempDir = tempDir;
         this.connection = connection;
         this.zipFile = zipFile;
@@ -54,6 +63,7 @@ public final class Anki4j implements AnkiCollection {
         this.modelService = modelService;
         this.mediaManager = mediaManager;
         this.renderService = renderService;
+        this.ankiWriter = ankiWriter;
     }
 
     static Anki4j read(String path) {
@@ -98,10 +108,11 @@ public final class Anki4j implements AnkiCollection {
             DeckRepository deckRepository = new DeckRepository(conn);
             ModelService modelService = new ModelService(conn);
             RenderService renderService = new RenderService(noteRepository, modelService);
+            AnkiWriter ankiWriter = new AnkiWriter(conn);
 
-            Anki4j instance = new Anki4j(tempDir, conn, zip,
+            Anki4j instance = new Anki4j(apkgPath, tempDir, conn, zip,
                     deckRepository, cardRepository, noteRepository,
-                    modelService, mediaManager, renderService);
+                    modelService, mediaManager, renderService, ankiWriter);
 
             // Set context for lazy loading
             deckRepository.setContext(instance);
@@ -175,6 +186,7 @@ public final class Anki4j implements AnkiCollection {
         return mediaManager.getMediaContent(filename);
     }
 
+    @Override
     public Optional<Model> getModel(long modelId) {
         return modelService.getModel(modelId);
     }
@@ -182,6 +194,12 @@ public final class Anki4j implements AnkiCollection {
     @Override
     public Optional<RenderedCard> renderCard(Card card) {
         return renderService.renderCard(card);
+    }
+
+    @Override
+    public void save(Note note) {
+        ankiWriter.save(note);
+        this.dirty = true;
     }
 
     // ==================== Resource Management ====================
@@ -196,6 +214,15 @@ public final class Anki4j implements AnkiCollection {
             logger.error("Failed to close database connection: {}", e.getMessage());
         }
 
+        if (dirty) {
+            try {
+                persistChanges();
+            } catch (IOException e) {
+                logger.error("Failed to persist changes to APKG file: {}", e.getMessage());
+                throw new AnkiException("Failed to persist changes back to " + originalPath, e);
+            }
+        }
+
         try {
             if (zipFile != null) {
                 zipFile.close();
@@ -205,6 +232,47 @@ public final class Anki4j implements AnkiCollection {
         }
 
         silentDeleteDir(tempDir);
+    }
+
+    private void persistChanges() throws IOException {
+        Path tempApkg = tempDir.resolve("updated.apkg");
+        try (ZipOutputStream zos = new ZipOutputStream(new FileOutputStream(tempApkg.toFile()))) {
+            // 1. Write the current database file(s) from tempDir
+            try (DirectoryStream<Path> stream = Files.newDirectoryStream(tempDir)) {
+                for (Path entry : stream) {
+                    if (Files.isRegularFile(entry) && entry.getFileName().toString().startsWith("collection.anki2")) {
+                        addToZip(entry, entry.getFileName().toString(), zos);
+                    }
+                }
+            }
+
+            // 2. Copy everything else from the original zip
+            Enumeration<? extends ZipEntry> entries = zipFile.entries();
+            while (entries.hasMoreElements()) {
+                ZipEntry entry = entries.nextElement();
+                String name = entry.getName();
+                // Skip the database files we already wrote
+                if (name.equals("collection.anki2") || name.equals("collection.anki21")) {
+                    continue;
+                }
+
+                zos.putNextEntry(new ZipEntry(name));
+                try (InputStream is = zipFile.getInputStream(entry)) {
+                    is.transferTo(zos);
+                }
+                zos.closeEntry();
+            }
+        }
+
+        // Replace original file with temporary updated one
+        Files.move(tempApkg, originalPath, StandardCopyOption.REPLACE_EXISTING);
+        logger.info("Successfully updated APKG file: {}", originalPath);
+    }
+
+    private void addToZip(Path file, String name, ZipOutputStream zos) throws IOException {
+        zos.putNextEntry(new ZipEntry(name));
+        Files.copy(file, zos);
+        zos.closeEntry();
     }
 
     private static void silentDeleteDir(Path dir) {

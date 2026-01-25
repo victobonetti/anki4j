@@ -54,6 +54,7 @@ public class Anki4jTest {
     private void createSyntheticApkg() throws Exception {
         // 1. Create a temporary SQLite DB
         Path dbPath = tempTestDir.resolve("collection.anki2");
+        Files.deleteIfExists(dbPath); // Fix: Ensure clean database for each call
         String url = "jdbc:sqlite:" + dbPath.toAbsolutePath();
 
         try (Connection conn = DriverManager.getConnection(url);
@@ -70,7 +71,10 @@ public class Anki4jTest {
             // Insert data
             stmt.execute("INSERT INTO decks (id, name) VALUES (1, 'Default')");
             stmt.execute("INSERT INTO decks (id, name) VALUES (100, 'Test Deck')");
-            stmt.execute("INSERT INTO col (models) VALUES ('{}')");
+
+            // Model with 2 fields: Front, Back
+            String modelsJson = "{\"1\": {\"id\": 1, \"name\": \"Basic\", \"flds\": [{\"name\": \"Front\", \"ord\": 0}, {\"name\": \"Back\", \"ord\": 1}], \"tmpls\": [{\"name\": \"Card 1\", \"qfmt\": \"{{Front}}\", \"afmt\": \"{{FrontSide}}<hr id=answer>{{Back}}\"}]}}";
+            stmt.execute("INSERT INTO col (models) VALUES ('" + modelsJson + "')");
 
             stmt.execute("INSERT INTO notes (id, guid, flds, mid) VALUES (10, 'guid1', 'Front\u001fBack', 1)");
             stmt.execute("INSERT INTO cards (id, nid, did, ord) VALUES (1000, 10, 100, 0)");
@@ -278,6 +282,30 @@ public class Anki4jTest {
             boolean found = decks.stream().anyMatch(d -> d.getName().equals("Legacy Deck") && d.getId() == 200);
             assertTrue("Should contain 'Legacy Deck' parsed from JSON", found);
             assertTrue("Should contain 'Default'", decks.stream().anyMatch(d -> d.getName().equals("Default")));
+        }
+    }
+
+    @Test
+    public void testPersistence() throws Exception {
+        // Core persistence test trace
+        // 1. Setup
+        createSyntheticApkg();
+        String originalPathString = apkgPath.toString();
+
+        // 2. Edit and Save
+        try (AnkiCollection anki = Anki4j.read(originalPathString)) {
+            Note note = anki.getNote(10).get();
+            note.getFieldsMap().set("Front", "Updated Front");
+            note.getFieldsMap().set("Back", "Updated Back");
+            anki.save(note);
+        } // Triggers re-zipping
+
+        // 3. Verify Persistence by re-opening
+        try (AnkiCollection anki = Anki4j.read(originalPathString)) {
+            Note note = anki.getNote(10).get();
+            assertEquals("Updated Front", note.getFieldsMap().get("Front"));
+            assertEquals("Updated Back", note.getFieldsMap().get("Back"));
+            assertEquals("Updated Front\u001fUpdated Back", note.getFields());
         }
     }
 }
