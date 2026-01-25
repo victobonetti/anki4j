@@ -48,9 +48,8 @@ try (Anki4j anki = Anki4j.read("/path/to/my-deck.apkg")) {
             // Lazy load the note for this card
             java.util.Optional<Note> noteOpt = card.getNote();
             noteOpt.ifPresent(note -> {
-                // Use helper methods to access Front (Title) and Back (Content)
-                System.out.println("    Front: " + note.getTitle());
-                System.out.println("    Back:  " + note.getContent());
+                System.out.println("    Front: " + anki.renderFront(card));
+                System.out.println("    Back:  " + anki.renderBack(card));
                 
                 // Access media
                 if (!note.getMediaReferences().isEmpty()) {
@@ -78,11 +77,11 @@ Anki4j includes a lightweight template engine to render the Question and Answer 
 // Inside the loop...
 for (Card card : cards) {
     // Render the Question side (Front)
-    String questionHtml = anki.render(card, true);
+    String questionHtml = anki.renderFront(card);
     System.out.println("Question HTML: " + questionHtml);
 
     // Render the Answer side (Back)
-    String answerHtml = anki.render(card, false);
+    String answerHtml = anki.renderBack(card);
     System.out.println("Answer HTML: " + answerHtml);
 }
 ```
@@ -122,5 +121,3 @@ Represents the core data entry (the "fact") independent of how it's displayed.
 | `guid` | `String` | Globally Unique ID used for syncing. |
 | `modelId` | `long` | ID of the Note Type (Model) that defines schema/fields. |
 | `fields` | `String` | Raw string concatenation of all field values, separated by `0x1F` (Unit Separator). |
-| `getTitle()`| `String` | Convenience method to get the first field (usually "Front"). |
-| `getContent()`| `String` | Convenience method to get the second field (usually "Back"). |

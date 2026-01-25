@@ -335,13 +335,26 @@ public class Anki4j implements AnkiCollection {
     }
 
     /**
-     * Renders the card content based on its template.
+     * Renders the Question side (Front) of the card.
      * 
-     * @param card         The card to render
-     * @param questionSide true for question (front), false for answer (back)
+     * @param card The card to render
      * @return Rendered HTML content or empty string if components missing
      */
-    public String render(Card card, boolean questionSide) {
+    public String renderFront(Card card) {
+        return render(card, true);
+    }
+
+    /**
+     * Renders the Answer side (Back) of the card.
+     * 
+     * @param card The card to render
+     * @return Rendered HTML content or empty string if components missing
+     */
+    public String renderBack(Card card) {
+        return render(card, false);
+    }
+
+    private String render(Card card, boolean questionSide) {
         Optional<Note> noteOpt = getNoteFromCard(card.getId());
         if (noteOpt.isEmpty())
             return "";

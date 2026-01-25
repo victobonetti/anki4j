@@ -60,7 +60,7 @@ public class Anki4jTest {
 
             // Create tables
             stmt.execute("CREATE TABLE decks (id INTEGER PRIMARY KEY, name TEXT)");
-            stmt.execute("CREATE TABLE col (id INTEGER PRIMARY KEY, decks TEXT)"); // Fallback table
+            stmt.execute("CREATE TABLE col (id INTEGER PRIMARY KEY, decks TEXT, models TEXT)"); // Fallback table
             stmt.execute(
                     "CREATE TABLE notes (id INTEGER PRIMARY KEY, guid TEXT, mid INTEGER, mod INTEGER, usn INTEGER, tags TEXT, flds TEXT, sfld INTEGER, csum INTEGER, flags INTEGER, data TEXT)");
             stmt.execute(
@@ -69,6 +69,7 @@ public class Anki4jTest {
             // Insert data
             stmt.execute("INSERT INTO decks (id, name) VALUES (1, 'Default')");
             stmt.execute("INSERT INTO decks (id, name) VALUES (100, 'Test Deck')");
+            stmt.execute("INSERT INTO col (models) VALUES ('{}')");
 
             stmt.execute("INSERT INTO notes (id, guid, flds, mid) VALUES (10, 'guid1', 'Front\u001fBack', 1)");
             stmt.execute("INSERT INTO cards (id, nid, did, ord) VALUES (1000, 10, 100, 0)");
@@ -95,7 +96,7 @@ public class Anki4jTest {
                 Statement stmt = conn.createStatement()) {
 
             // Create tables
-            stmt.execute("CREATE TABLE col (id INTEGER PRIMARY KEY, decks TEXT)");
+            stmt.execute("CREATE TABLE col (id INTEGER PRIMARY KEY, decks TEXT, models TEXT)");
             stmt.execute(
                     "CREATE TABLE notes (id INTEGER PRIMARY KEY, guid TEXT, mid INTEGER, mod INTEGER, usn INTEGER, tags TEXT, flds TEXT, sfld INTEGER, csum INTEGER, flags INTEGER, data TEXT)");
             stmt.execute(
@@ -103,7 +104,7 @@ public class Anki4jTest {
 
             // Insert data with JSON in 'col.decks'
             String decksJson = "{\"1\": {\"name\": \"Default\", \"id\": 1}, \"200\": {\"name\": \"Legacy Deck\", \"id\": 200}}";
-            stmt.execute("INSERT INTO col (id, decks) VALUES (1, '" + decksJson + "')");
+            stmt.execute("INSERT INTO col (id, decks, models) VALUES (1, '" + decksJson + "', '{}')");
         }
 
         // 2. Zip it into .apkg
@@ -138,8 +139,6 @@ public class Anki4jTest {
             assertTrue(noteOpt.isPresent());
             Note note = noteOpt.get();
             assertEquals("Front\u001fBack", note.getFields());
-            assertEquals("Front", note.getTitle());
-            assertEquals("Back", note.getContent());
 
         } catch (Exception e) {
             e.printStackTrace();
@@ -165,7 +164,6 @@ public class Anki4jTest {
             java.util.Optional<Note> note = anki.getNoteFromCard(1000);
             assertTrue(note.isPresent());
             assertEquals(10, note.get().getId());
-            assertEquals("Front", note.get().getTitle());
 
         } catch (Exception e) {
             e.printStackTrace();
@@ -185,13 +183,14 @@ public class Anki4jTest {
 
             // Create tables
             stmt.execute("CREATE TABLE decks (id INTEGER PRIMARY KEY, name TEXT)");
-            stmt.execute("CREATE TABLE col (id INTEGER PRIMARY KEY, decks TEXT)");
+            stmt.execute("CREATE TABLE col (id INTEGER PRIMARY KEY, decks TEXT, models TEXT)");
             stmt.execute(
                     "CREATE TABLE notes (id INTEGER PRIMARY KEY, guid TEXT, mid INTEGER, mod INTEGER, usn INTEGER, tags TEXT, flds TEXT, sfld INTEGER, csum INTEGER, flags INTEGER, data TEXT)");
             stmt.execute(
                     "CREATE TABLE cards (id INTEGER PRIMARY KEY, nid INTEGER, did INTEGER, ord INTEGER, mod INTEGER, usn INTEGER, type INTEGER, queue INTEGER, due INTEGER, ivl INTEGER, factor INTEGER, reps INTEGER, lapses INTEGER, left INTEGER, odue INTEGER, odid INTEGER, flags INTEGER, data TEXT)");
 
             stmt.execute("INSERT INTO decks (id, name) VALUES (1, 'Default')");
+            stmt.execute("INSERT INTO col (models) VALUES ('{}')");
             // Insert note with media refs using char 31 as separator
             // String flds = "Bird<img src=\"bird.jpg\">" + (char) 31 + "[sound:chirp.mp3]";
             // stmt.execute("INSERT INTO notes (id, guid, flds, mid) VALUES (500,

@@ -50,23 +50,6 @@ public class Note implements Serializable {
         this.modelId = modelId;
     }
 
-    private String[] getFieldParts() {
-        if (fields == null)
-            return new String[0];
-        // Anki uses \u001f (Unit Separator) to separate fields
-        return fields.split("\u001f");
-    }
-
-    public String getTitle() {
-        String[] parts = getFieldParts();
-        return parts.length > 0 ? parts[0] : "";
-    }
-
-    public String getContent() {
-        String[] parts = getFieldParts();
-        return parts.length > 1 ? parts[1] : "";
-    }
-
     public java.util.List<String> getMediaReferences() {
         java.util.List<String> media = new java.util.ArrayList<>();
         if (fields == null)
