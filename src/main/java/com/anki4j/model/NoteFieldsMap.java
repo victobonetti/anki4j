@@ -38,6 +38,11 @@ public class NoteFieldsMap implements Iterable<NoteFieldsMap.FieldEntry> {
             return modified;
         }
 
+        @Override
+        public String toString() {
+            return name + "=" + (value != null ? value : "");
+        }
+
         void resetModified() {
             this.modified = false;
         }
@@ -102,5 +107,17 @@ public class NoteFieldsMap implements Iterable<NoteFieldsMap.FieldEntry> {
         for (FieldEntry entry : entries) {
             entry.resetModified();
         }
+    }
+
+    @Override
+    public String toString() {
+        StringBuilder sb = new StringBuilder("{");
+        for (int i = 0; i < entries.size(); i++) {
+            if (i > 0)
+                sb.append(", ");
+            sb.append(entries.get(i).toString());
+        }
+        sb.append("}");
+        return sb.toString();
     }
 }

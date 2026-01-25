@@ -17,9 +17,9 @@ public sealed interface AnkiCollection extends AutoCloseable permits Anki4j {
 
     List<Deck> getDecks();
 
-    Optional<Deck> getDeck(long deckId);
-
     List<Card> getCards(long deckId);
+
+    Optional<Deck> getDeck(long deckId);
 
     Optional<Card> getCard(long cardId);
 
