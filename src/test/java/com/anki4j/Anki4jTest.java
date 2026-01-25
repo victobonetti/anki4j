@@ -146,6 +146,32 @@ public class Anki4jTest {
         }
     }
 
+    @Test
+    public void testCollectionMethods() {
+        try (AnkiCollection anki = Anki4j.read(apkgPath.toString())) {
+            // Test getDeck
+            Deck deck = anki.getDeck(100);
+            assertNotNull(deck);
+            assertEquals("Test Deck", deck.getName());
+
+            // Test getCard
+            Card card = anki.getCard(1000);
+            assertNotNull(card);
+            assertEquals(100, card.getDeckId());
+            assertEquals(10, card.getNoteId());
+
+            // Test getNoteFromCard
+            Note note = anki.getNoteFromCard(1000);
+            assertNotNull(note);
+            assertEquals(10, note.getId());
+            assertEquals("Front", note.getTitle());
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            fail(e.getMessage());
+        }
+    }
+
     private void createMediaApkg() throws Exception {
         // 1. Create a temporary SQLite DB (LEGACY: No 'decks' table, data in 'col')
         Path dbPath = tempTestDir.resolve("collection.anki2");

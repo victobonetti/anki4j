@@ -188,6 +188,55 @@ public class Anki4j implements AnkiCollection {
         return decks;
     }
 
+    public Deck getDeck(long deckId) {
+        // Try querying 'decks' table first
+        try (Statement stmt = connection.createStatement()) {
+            boolean decksTableExists = false;
+            try (ResultSet rs = connection.getMetaData().getTables(null, null, "decks", null)) {
+                if (rs.next()) {
+                    decksTableExists = true;
+                }
+            }
+
+            if (decksTableExists) {
+                try (PreparedStatement pstmt = connection.prepareStatement("SELECT id, name FROM decks WHERE id = ?")) {
+                    pstmt.setLong(1, deckId);
+                    try (ResultSet rs = pstmt.executeQuery()) {
+                        if (rs.next()) {
+                            Deck d = new Deck(rs.getLong("id"), rs.getString("name"));
+                            d.setContext(this);
+                            return d;
+                        }
+                    }
+                }
+            } else {
+                // Fallback: Parse 'col' table JSON
+                try (ResultSet rs = stmt.executeQuery("SELECT decks FROM col LIMIT 1")) {
+                    if (rs.next()) {
+                        String json = rs.getString("decks");
+                        if (json != null && !json.isEmpty()) {
+                            try {
+                                JsonNode root = objectMapper.readTree(json);
+                                JsonNode deckNode = root.get(String.valueOf(deckId));
+                                if (deckNode != null) {
+                                    String name = deckNode.get("name").asText();
+                                    Deck d = new Deck(deckId, name);
+                                    d.setContext(this);
+                                    return d;
+                                }
+                            } catch (Exception e) {
+                                throw new AnkiException("Failed to parse decks JSON from col table", e);
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (SQLException e) {
+            throw new AnkiException("Failed to query deck by id: " + deckId, e);
+        }
+        return null;
+    }
+
     public List<Card> getCards(long deckId) {
         List<Card> cards = new ArrayList<>();
         String sql = "SELECT id, nid, did, ord FROM cards";
@@ -214,6 +263,35 @@ public class Anki4j implements AnkiCollection {
             throw new AnkiException("Failed to query cards", e);
         }
         return cards;
+    }
+
+    public Card getCard(long cardId) {
+        String sql = "SELECT id, nid, did, ord FROM cards WHERE id = ?";
+        try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+            stmt.setLong(1, cardId);
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    Card c = new Card(
+                            rs.getLong("id"),
+                            rs.getLong("nid"),
+                            rs.getLong("did"),
+                            rs.getLong("ord"));
+                    c.setContext(this);
+                    return c;
+                }
+            }
+        } catch (SQLException e) {
+            throw new AnkiException("Failed to query card by id: " + cardId, e);
+        }
+        return null;
+    }
+
+    public Note getNoteFromCard(long cardId) {
+        Card card = getCard(cardId);
+        if (card != null) {
+            return getNote(card.getNoteId());
+        }
+        return null;
     }
 
     public Note getNote(long noteId) {
