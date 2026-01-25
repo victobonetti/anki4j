@@ -2,12 +2,19 @@ package com.anki4j;
 
 import com.anki4j.model.Card;
 import com.anki4j.model.Deck;
+import com.anki4j.model.Model;
 import com.anki4j.model.Note;
+import com.anki4j.renderer.RenderedCard;
 
 import java.util.List;
 import java.util.Optional;
 
-public interface AnkiCollection extends AutoCloseable {
+public sealed interface AnkiCollection extends AutoCloseable permits Anki4j {
+
+    static AnkiCollection read(String path) {
+        return Anki4j.read(path);
+    }
+
     List<Deck> getDecks();
 
     Optional<Deck> getDeck(long deckId);
@@ -20,5 +27,11 @@ public interface AnkiCollection extends AutoCloseable {
 
     Optional<Note> getNoteFromCard(long cardId);
 
-    byte[] getMediaContent(String filename);
+    Optional<byte[]> getMediaContent(String filename);
+
+    Optional<Model> getModel(long modelId);
+
+    Optional<RenderedCard> renderCard(Card card);
+
+    void close();
 }

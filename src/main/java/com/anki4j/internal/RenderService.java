@@ -1,0 +1,46 @@
+package com.anki4j.internal;
+
+import com.anki4j.model.Card;
+import com.anki4j.model.Model;
+import com.anki4j.model.Note;
+import com.anki4j.model.Template;
+import com.anki4j.renderer.RenderedCard;
+import com.anki4j.renderer.Renderer;
+
+import java.util.Optional;
+
+public class RenderService {
+
+    private final NoteRepository noteRepository;
+    private final ModelService modelService;
+    private final Renderer renderer;
+
+    public RenderService(NoteRepository noteRepository, ModelService modelService) {
+        this.noteRepository = noteRepository;
+        this.modelService = modelService;
+        this.renderer = new Renderer();
+    }
+
+    public Optional<RenderedCard> renderCard(Card card) {
+        Optional<Note> noteOpt = noteRepository.getNoteFromCard(card.getId());
+        if (noteOpt.isEmpty())
+            return Optional.empty();
+        Note note = noteOpt.get();
+
+        Optional<Model> modelOpt = modelService.getModel(note.getModelId());
+        if (modelOpt.isEmpty())
+            return Optional.empty();
+        Model model = modelOpt.get();
+
+        int ord = (int) card.getOrdinal();
+        Template template = null;
+        if (model.getTmpls() != null && ord < model.getTmpls().size()) {
+            template = model.getTmpls().get(ord);
+        }
+
+        if (template == null)
+            return Optional.empty();
+
+        return Optional.of(renderer.renderCard(note, model, template));
+    }
+}

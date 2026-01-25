@@ -12,8 +12,27 @@ import java.util.regex.Pattern;
 
 public class Renderer {
 
-    // Regex to match {{...}} tags
-    private static final Pattern TAG_PATTERN = Pattern.compile("\\{\\{[^}]+\\}\\}");
+    // Regex for conditional blocks: {{#FieldName}}...{{/FieldName}}
+    private static final Pattern CONDITIONAL_PATTERN = Pattern.compile(
+            "\\{\\{#([^}]+)\\}\\}(.*?)\\{\\{/\\1\\}\\}", Pattern.DOTALL);
+
+    // Regex for negative conditional blocks: {{^FieldName}}...{{/FieldName}}
+    private static final Pattern NEGATIVE_CONDITIONAL_PATTERN = Pattern.compile(
+            "\\{\\{\\^([^}]+)\\}\\}(.*?)\\{\\{/\\1\\}\\}", Pattern.DOTALL);
+
+    // Regex to match simple {{...}} tags
+    private static final Pattern TAG_PATTERN = Pattern.compile("\\{\\{[^}#/^]+\\}\\}");
+
+    /**
+     * Renders a full RenderedCard object containing fields, front, back, and CSS.
+     */
+    public RenderedCard renderCard(Note note, Model model, Template template) {
+        Map<String, String> fieldValues = getFieldMap(note, model);
+        String front = render(template.getQfmt(), fieldValues, null);
+        String back = render(template.getAfmt(), fieldValues, front);
+        String css = model.getCss() != null ? model.getCss() : "";
+        return new RenderedCard(fieldValues, front, back, css);
+    }
 
     public String renderQuestion(Note note, Model model, Template template) {
         Map<String, String> fieldValues = getFieldMap(note, model);
@@ -26,7 +45,10 @@ public class Renderer {
         return render(template.getAfmt(), fieldValues, questionSide);
     }
 
-    private Map<String, String> getFieldMap(Note note, Model model) {
+    /**
+     * Creates a field map from Note content using Model field definitions.
+     */
+    public Map<String, String> getFieldMap(Note note, Model model) {
         String[] rawValues = note.getFields().split("\u001F"); // Unit Separator 0x1F
         Map<String, String> map = new HashMap<>();
 
@@ -42,62 +64,79 @@ public class Renderer {
         if (template == null)
             return "";
 
+        // Pass 1: Process positive conditional blocks {{#Field}}...{{/Field}}
+        String result = processConditionals(template, fieldValues, false);
+
+        // Pass 2: Process negative conditional blocks {{^Field}}...{{/Field}}
+        result = processConditionals(result, fieldValues, true);
+
+        // Pass 3: Substitute simple tags
+        result = substituteSimpleTags(result, fieldValues, frontSide);
+
+        return result;
+    }
+
+    private String processConditionals(String template, Map<String, String> fieldValues, boolean negative) {
+        Pattern pattern = negative ? NEGATIVE_CONDITIONAL_PATTERN : CONDITIONAL_PATTERN;
+        Matcher matcher = pattern.matcher(template);
+        StringBuffer sb = new StringBuffer();
+
+        while (matcher.find()) {
+            String fieldName = matcher.group(1).trim();
+            String blockContent = matcher.group(2);
+
+            String value = fieldValues.getOrDefault(fieldName, "");
+            boolean fieldHasContent = value != null && !value.trim().isEmpty();
+
+            String replacement;
+            if (negative) {
+                // {{^Field}} - render if field IS empty
+                replacement = fieldHasContent ? "" : blockContent;
+            } else {
+                // {{#Field}} - render if field is NOT empty
+                replacement = fieldHasContent ? blockContent : "";
+            }
+            matcher.appendReplacement(sb, Matcher.quoteReplacement(replacement));
+        }
+        matcher.appendTail(sb);
+        return sb.toString();
+    }
+
+    private String substituteSimpleTags(String template, Map<String, String> fieldValues, String frontSide) {
         Matcher matcher = TAG_PATTERN.matcher(template);
         StringBuffer sb = new StringBuffer();
 
         while (matcher.find()) {
             String tag = matcher.group();
-            String inner = tag.substring(2, tag.length() - 2); // Remove {{ and }}
+            String inner = tag.substring(2, tag.length() - 2).trim(); // Remove {{ and }}
             String replacement = "";
 
             if ("FrontSide".equals(inner)) {
                 replacement = (frontSide != null) ? frontSide : "";
             } else if (inner.startsWith("cloze:")) {
                 String fieldName = inner.substring(6);
-                String value = fieldValues.getOrDefault(fieldName, "");
-                // Basic cloze handling: just return the text for now, or maybe strip cloze
-                // tags?
-                // The prompt asked for "Handle", but didn't specify full cloze logic.
-                // Anki's cloze logic is complex. For simple rendering, showing the full text is
-                // a safe fallback
-                // unless we want to process "cloze:Text" -> "..."
-                // For now, let's just return the raw value, or maybe strip {{c1::...}}?
-                // Proper cloze replacement is typically done by CSS/Classes in Anki,
-                // but the text itself needs to be processed.
-                // Let's stick to raw value for now as a "pass-through".
-                replacement = value;
+                replacement = fieldValues.getOrDefault(fieldName, "");
             } else if (inner.startsWith("type:")) {
-                // String fieldName = inner.substring(5);
-                // Input field handling. Usually renders an <input> tag.
-                // For static rendering, maybe just show the value or nothing.
-                // Let's replace with empty or value?
-                // Standard Anki behavior: [[type:Field]] -> <input ...>
-                // We will return a simple input placeholder.
                 replacement = "<input type='text' value='' class='type-input' />";
+            } else if (inner.startsWith("hint:")) {
+                String fieldName = inner.substring(5);
+                String value = fieldValues.getOrDefault(fieldName, "");
+                if (!value.isEmpty()) {
+                    replacement = "<a class='hint' href='#' onclick='this.style.display=\"none\";document.getElementById(\"hint_"
+                            + fieldName + "\").style.display=\"block\";return false;'>Show " + fieldName
+                            + "</a><div id='hint_" + fieldName + "' style='display:none'>" + value + "</div>";
+                }
             } else {
-                // Standard field replacement
-                // Also handle modifiers later if needed (e.g. text:Field)
-                replacement = fieldValues.getOrDefault(inner, tag);
-                if (replacement.equals(tag)) {
-                    // If exactly tag (unknown field), maybe check for special modifiers or just
-                    // keep it?
-                    // Usually Anki keeps it if unknown, or makes empty.
-                    // But let's check for "hint:" etc? Logic can be expanded.
-                    // For now, let's assume direct match.
-                    if (!fieldValues.containsKey(inner)) {
-                        // Fallback: check if we have modifiers like 'text:'
-                        // Very basic check
-                        String[] parts = inner.split(":");
-                        if (parts.length > 1) {
-                            String fieldName = parts[parts.length - 1];
-                            if (fieldValues.containsKey(fieldName)) {
-                                replacement = fieldValues.get(fieldName);
-                            }
-                        }
+                // Standard field replacement or modifiers like text:Field
+                replacement = fieldValues.getOrDefault(inner, "");
+                if (replacement.isEmpty() && inner.contains(":")) {
+                    String[] parts = inner.split(":");
+                    if (parts.length > 1) {
+                        String fieldName = parts[parts.length - 1];
+                        replacement = fieldValues.getOrDefault(fieldName, "");
                     }
                 }
             }
-            // Escape special chars for matcher.appendReplacement
             matcher.appendReplacement(sb, Matcher.quoteReplacement(replacement));
         }
         matcher.appendTail(sb);

@@ -15,6 +15,7 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.Statement;
 import java.util.List;
+import java.util.Optional;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
@@ -253,13 +254,13 @@ public class Anki4jTest {
             assertTrue(mediaRefs.contains("chirp.mp3"));
 
             // Check Content Extraction
-            byte[] imageBytes = anki.getMediaContent("bird.jpg");
-            assertNotNull(imageBytes);
-            assertEquals("IMAGE_DATA", new String(imageBytes));
+            Optional<byte[]> imageBytes = anki.getMediaContent("bird.jpg");
+            assertTrue(imageBytes.isPresent());
+            assertEquals("IMAGE_DATA", new String(imageBytes.get()));
 
-            byte[] audioBytes = anki.getMediaContent("chirp.mp3");
-            assertNotNull(audioBytes);
-            assertEquals("AUDIO_DATA", new String(audioBytes));
+            Optional<byte[]> audioBytes = anki.getMediaContent("chirp.mp3");
+            assertTrue(audioBytes.isPresent());
+            assertEquals("AUDIO_DATA", new String(audioBytes.get()));
 
         } catch (Exception e) {
             e.printStackTrace();

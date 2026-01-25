@@ -69,21 +69,52 @@ try (Anki4j anki = Anki4j.read("/path/to/my-deck.apkg")) {
     e.printStackTrace();
 }
 ```
-### Rendering Cards (Templates)
 
-Anki4j includes a lightweight template engine to render the Question and Answer sides of a card, automatically handling field substitution and basic special tags (like `{{FrontSide}}`, `{{cloze:}}`, `{{type:}}`).
+### 🎯 Structured Rendering with RenderedCard
+
+For more control, use `renderCard()` to get a structured object containing the field map, rendered HTML, and CSS:
+Optional<RenderedCard> renderedOpt = anki.renderCard(card);
+renderedOpt.ifPresent(rendered -> {
+    // Access individual field values
+    Map<String, String> fields = rendered.getFields();
+    System.out.println("Front field: " + fields.get("Front"));
+    
+    // Get pre-rendered HTML
+    System.out.println("Question: " + rendered.getFront());
+    System.out.println("Answer: " + rendered.getBack());
+    
+    // Get CSS for WebView styling
+    System.out.println("CSS: " + rendered.getCss());
+});
+```
+
+**Supported Template Syntax:**
+- `{{FieldName}}` - Simple field substitution
+- `{{#FieldName}}...{{/FieldName}}` - Conditional block (renders if field is not empty)
+- `{{^FieldName}}...{{/FieldName}}` - Negative conditional (renders if field IS empty)
+- `{{FrontSide}}` - Include the front content in the answer template
+- `{{cloze:FieldName}}` - Cloze deletion support
+- `{{type:FieldName}}` - Type-in answer field
+- `{{hint:FieldName}}` - Collapsible hint
+
+
+### 🏷️ Working with Models
+
+Anki4j allows you to access Note Types (Models) which define the schema, fields, and styling for your notes.
 
 ```java
-// Inside the loop...
-for (Card card : cards) {
-    // Render the Question side (Front)
-    String questionHtml = anki.renderFront(card);
-    System.out.println("Question HTML: " + questionHtml);
+// Inside the note processing loop...
+anki.getModel(note.getModelId()).ifPresent(model -> {
+    System.out.println("Model Name: " + model.getName());
+    
+    // Access individual field definitions
+    model.getFlds().forEach(field -> {
+        System.out.println("  Field: " + field.getName() + " (Order: " + field.getOrd() + ")");
+    });
 
-    // Render the Answer side (Back)
-    String answerHtml = anki.renderBack(card);
-    System.out.println("Answer HTML: " + answerHtml);
-}
+    // Access raw CSS for this model
+    System.out.println("Model CSS: " + model.getCss());
+});
 ```
 
 ## 🛠 Tech Stack
@@ -121,3 +152,13 @@ Represents the core data entry (the "fact") independent of how it's displayed.
 | `guid` | `String` | Globally Unique ID used for syncing. |
 | `modelId` | `long` | ID of the Note Type (Model) that defines schema/fields. |
 | `fields` | `String` | Raw string concatenation of all field values, separated by `0x1F` (Unit Separator). |
+
+### Model
+Represents the Note Type (schema, fields, and templates).
+| Field | Type | Description |
+|---|---|---|
+| `id` | `long` | Unique identifier for the model. |
+| `name` | `String` | The name of the model (e.g., "Basic", "Cloze"). |
+| `getFlds()` | `List<Field>` | List of field definitions (names and positions). |
+| `getTmpls()` | `List<Template>` | List of card templates associated with this model. |
+| `getCss()` | `String` | Global CSS styling shared by all cards of this type. |

@@ -1,4 +1,4 @@
-package com.anki4j.service;
+package com.anki4j.internal;
 
 import com.anki4j.exception.AnkiException;
 import com.anki4j.model.Model;
@@ -18,16 +18,14 @@ import java.util.Optional;
 public class ModelService {
 
     private final Map<Long, Model> modelCache = new HashMap<>();
-    private final Connection connection;
     private final ObjectMapper objectMapper;
 
     public ModelService(Connection connection) {
-        this.connection = connection;
         this.objectMapper = new ObjectMapper();
-        loadModels();
+        loadModels(connection);
     }
 
-    private void loadModels() {
+    private void loadModels(Connection connection) {
         try (Statement stmt = connection.createStatement();
                 ResultSet rs = stmt.executeQuery("SELECT models FROM col LIMIT 1")) {
 
@@ -39,10 +37,8 @@ public class ModelService {
                         Iterator<Map.Entry<String, JsonNode>> fields = root.fields();
                         while (fields.hasNext()) {
                             Map.Entry<String, JsonNode> field = fields.next();
-                            // Key is model ID
                             long id = Long.parseLong(field.getKey());
                             Model model = objectMapper.treeToValue(field.getValue(), Model.class);
-                            // Ensure ID is set if not present in value (though usually it is)
                             if (model.getId() == 0) {
                                 model.setId(id);
                             }
