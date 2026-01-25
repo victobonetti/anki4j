@@ -16,7 +16,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.zip.ZipEntry;
-import java.util.zip.ZipInputStream;
+import java.io.InputStream;
+import java.util.zip.ZipFile;
 import java.util.Iterator;
 import java.util.Map;
 
@@ -30,11 +31,15 @@ public class Anki4j implements AutoCloseable {
     private final Path tempDir;
     private final Connection connection;
     private final ObjectMapper objectMapper;
+    private final ZipFile zipFile;
+    private final MediaManager mediaManager;
 
-    private Anki4j(Path tempDir, Connection connection) {
+    private Anki4j(Path tempDir, Connection connection, ZipFile zipFile, MediaManager mediaManager) {
         this.tempDir = tempDir;
         this.connection = connection;
         this.objectMapper = new ObjectMapper();
+        this.zipFile = zipFile;
+        this.mediaManager = mediaManager;
     }
 
     public static Anki4j read(String path) {
@@ -50,8 +55,12 @@ public class Anki4j implements AutoCloseable {
             throw new AnkiException("Failed to create temporary directory", e);
         }
 
+        ZipFile zip = null;
         try {
-            extractCollection(apkgPath, tempDir);
+            zip = new ZipFile(apkgPath.toFile());
+
+            // Extract DB
+            extractCollection(zip, tempDir);
 
             // Try to find the database file. It should be collection.anki2 or
             // collection.anki21
@@ -64,14 +73,24 @@ public class Anki4j implements AutoCloseable {
                 throw new AnkiException("Could not find collection.anki2 or collection.anki21 in the archive");
             }
 
+            // Load Media Map
+            MediaManager mediaManager = new MediaManager();
+            mediaManager.loadMap(zip);
+
             // Connect to SQLite
             String url = "jdbc:sqlite:" + dbFile.toAbsolutePath();
             Connection conn = DriverManager.getConnection(url);
 
-            return new Anki4j(tempDir, conn);
+            return new Anki4j(tempDir, conn, zip, mediaManager);
 
         } catch (Exception e) {
             // Cleanup on failure
+            if (zip != null) {
+                try {
+                    zip.close();
+                } catch (IOException ignored) {
+                }
+            }
             silentDeleteDir(tempDir);
             if (e instanceof AnkiException) {
                 throw (AnkiException) e;
@@ -80,17 +99,36 @@ public class Anki4j implements AutoCloseable {
         }
     }
 
-    private static void extractCollection(Path apkgPath, Path outputDir) throws IOException {
-        try (ZipInputStream zis = new ZipInputStream(Files.newInputStream(apkgPath))) {
-            ZipEntry entry;
-            while ((entry = zis.getNextEntry()) != null) {
-                String name = entry.getName();
-                if ("collection.anki2".equals(name) || "collection.anki21".equals(name)) {
-                    Path outFile = outputDir.resolve(name);
-                    Files.copy(zis, outFile, StandardCopyOption.REPLACE_EXISTING);
-                }
-                zis.closeEntry();
+    private static void extractCollection(ZipFile zip, Path outputDir) throws IOException {
+        ZipEntry entry21 = zip.getEntry("collection.anki21");
+        ZipEntry entry20 = zip.getEntry("collection.anki2");
+
+        ZipEntry target = entry21 != null ? entry21 : entry20;
+
+        if (target != null) {
+            Path outFile = outputDir.resolve(target.getName());
+            try (InputStream is = zip.getInputStream(target)) {
+                Files.copy(is, outFile, StandardCopyOption.REPLACE_EXISTING);
             }
+        }
+    }
+
+    public byte[] getMediaContent(String filename) {
+        String zipName = mediaManager.getZipEntryName(filename);
+        if (zipName == null) {
+            return null; // Media not found in map
+        }
+
+        ZipEntry entry = zipFile.getEntry(zipName);
+        if (entry == null) {
+            return null; // Entry mapping exists but file missing in zip
+        }
+
+        try (InputStream is = zipFile.getInputStream(entry)) {
+            return is.readAllBytes();
+        } catch (IOException e) {
+            logger.error("Failed to read media file '{}' (zip entry '{}'): {}", filename, zipName, e.getMessage());
+            throw new AnkiException("Failed to read media file: " + filename, e);
         }
     }
 
@@ -236,6 +274,14 @@ public class Anki4j implements AutoCloseable {
             logger.error("Failed to close database connection: {}", e.getMessage());
         }
 
+        try {
+            if (zipFile != null) {
+                zipFile.close();
+            }
+        } catch (IOException e) {
+            logger.error("Failed to close zip file: {}", e.getMessage());
+        }
+
         silentDeleteDir(tempDir);
     }
 
@@ -257,7 +303,8 @@ public class Anki4j implements AutoCloseable {
                 }
             });
         } catch (IOException e) {
-            // Ignore deletion errors as per "silent" contract, or maybe print stack trace
+            // Ignore deletion errors as per "silent" contract, or maybe print stack
+            // trace
             e.printStackTrace();
         }
     }

@@ -67,6 +67,28 @@ public class Note implements Serializable {
         return parts.length > 1 ? parts[1] : "";
     }
 
+    public java.util.List<String> getMediaReferences() {
+        java.util.List<String> media = new java.util.ArrayList<>();
+        if (fields == null)
+            return media;
+
+        // Regex for [sound:filename]
+        java.util.regex.Pattern soundPattern = java.util.regex.Pattern.compile("\\[sound:(.*?)\\]");
+        java.util.regex.Matcher soundMatcher = soundPattern.matcher(fields);
+        while (soundMatcher.find()) {
+            media.add(soundMatcher.group(1));
+        }
+
+        // Regex for <img src="filename">
+        java.util.regex.Pattern imgPattern = java.util.regex.Pattern.compile("<img[^>]+src=[\"']([^\"']+)[\"'][^>]*>");
+        java.util.regex.Matcher imgMatcher = imgPattern.matcher(fields);
+        while (imgMatcher.find()) {
+            media.add(imgMatcher.group(1));
+        }
+
+        return media;
+    }
+
     @Override
     public String toString() {
         try {

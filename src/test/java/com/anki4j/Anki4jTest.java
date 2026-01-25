@@ -146,6 +146,100 @@ public class Anki4jTest {
         }
     }
 
+    private void createMediaApkg() throws Exception {
+        // 1. Create a temporary SQLite DB (LEGACY: No 'decks' table, data in 'col')
+        Path dbPath = tempTestDir.resolve("collection.anki2");
+        Files.deleteIfExists(dbPath);
+
+        String url = "jdbc:sqlite:" + dbPath.toAbsolutePath();
+
+        try (Connection conn = DriverManager.getConnection(url);
+                Statement stmt = conn.createStatement()) {
+
+            // Create tables
+            stmt.execute("CREATE TABLE decks (id INTEGER PRIMARY KEY, name TEXT)");
+            stmt.execute("CREATE TABLE col (id INTEGER PRIMARY KEY, decks TEXT)");
+            stmt.execute(
+                    "CREATE TABLE notes (id INTEGER PRIMARY KEY, guid TEXT, mid INTEGER, mod INTEGER, usn INTEGER, tags TEXT, flds TEXT, sfld INTEGER, csum INTEGER, flags INTEGER, data TEXT)");
+            stmt.execute(
+                    "CREATE TABLE cards (id INTEGER PRIMARY KEY, nid INTEGER, did INTEGER, ord INTEGER, mod INTEGER, usn INTEGER, type INTEGER, queue INTEGER, due INTEGER, ivl INTEGER, factor INTEGER, reps INTEGER, lapses INTEGER, left INTEGER, odue INTEGER, odid INTEGER, flags INTEGER, data TEXT)");
+
+            stmt.execute("INSERT INTO decks (id, name) VALUES (1, 'Default')");
+            // Insert note with media refs using char 31 as separator
+            // String flds = "Bird<img src=\"bird.jpg\">" + (char) 31 + "[sound:chirp.mp3]";
+            // stmt.execute("INSERT INTO notes (id, guid, flds, mid) VALUES (500,
+            // 'guidMedia', ?, 1)");
+
+            // Need to use PreparedStatement for special chars if direct insert fails, but
+            // string concat should be fine here for basic test
+            // Actually, let's use prepared statement for safety
+        }
+        try (Connection conn = DriverManager.getConnection(url);
+                java.sql.PreparedStatement pstmt = conn
+                        .prepareStatement("INSERT INTO notes (id, guid, flds, mid) VALUES (500, 'guidMedia', ?, 1)")) {
+            pstmt.setString(1, "Bird<img src=\"bird.jpg\">" + (char) 31 + "[sound:chirp.mp3]");
+            pstmt.executeUpdate();
+        }
+
+        // 2. Zip it into .apkg with media file and dummy assets
+        apkgPath = tempTestDir.resolve("media.apkg");
+        try (ZipOutputStream zos = new ZipOutputStream(new FileOutputStream(apkgPath.toFile()))) {
+            // DB
+            ZipEntry entry = new ZipEntry("collection.anki2");
+            zos.putNextEntry(entry);
+            Files.copy(dbPath, zos);
+            zos.closeEntry();
+
+            // Media Map
+            ZipEntry media = new ZipEntry("media");
+            zos.putNextEntry(media);
+            // "0": "bird.jpg", "1": "chirp.mp3"
+            String json = "{\"0\": \"bird.jpg\", \"1\": \"chirp.mp3\"}";
+            zos.write(json.getBytes());
+            zos.closeEntry();
+
+            // Assets
+            ZipEntry asset0 = new ZipEntry("0");
+            zos.putNextEntry(asset0);
+            zos.write("IMAGE_DATA".getBytes());
+            zos.closeEntry();
+
+            ZipEntry asset1 = new ZipEntry("1");
+            zos.putNextEntry(asset1);
+            zos.write("AUDIO_DATA".getBytes());
+            zos.closeEntry();
+        }
+    }
+
+    @Test
+    public void testMediaSupport() throws Exception {
+        createMediaApkg();
+        try (Anki4j anki = Anki4j.read(apkgPath.toString())) {
+
+            // Check Note References
+            Note note = anki.getNote(500);
+            assertNotNull(note);
+
+            List<String> mediaRefs = note.getMediaReferences();
+            assertEquals(2, mediaRefs.size());
+            assertTrue(mediaRefs.contains("bird.jpg"));
+            assertTrue(mediaRefs.contains("chirp.mp3"));
+
+            // Check Content Extraction
+            byte[] imageBytes = anki.getMediaContent("bird.jpg");
+            assertNotNull(imageBytes);
+            assertEquals("IMAGE_DATA", new String(imageBytes));
+
+            byte[] audioBytes = anki.getMediaContent("chirp.mp3");
+            assertNotNull(audioBytes);
+            assertEquals("AUDIO_DATA", new String(audioBytes));
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            fail(e.getMessage());
+        }
+    }
+
     @Test
     public void testReadLegacyDecks() throws Exception {
         createLegacyApkg();
