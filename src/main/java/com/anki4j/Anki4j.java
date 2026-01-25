@@ -24,6 +24,8 @@ import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Optional;
+
 public class Anki4j implements AnkiCollection {
 
     private static final Logger logger = LoggerFactory.getLogger(Anki4j.class);
@@ -188,7 +190,7 @@ public class Anki4j implements AnkiCollection {
         return decks;
     }
 
-    public Deck getDeck(long deckId) {
+    public Optional<Deck> getDeck(long deckId) {
         // Try querying 'decks' table first
         try (Statement stmt = connection.createStatement()) {
             boolean decksTableExists = false;
@@ -205,7 +207,7 @@ public class Anki4j implements AnkiCollection {
                         if (rs.next()) {
                             Deck d = new Deck(rs.getLong("id"), rs.getString("name"));
                             d.setContext(this);
-                            return d;
+                            return Optional.of(d);
                         }
                     }
                 }
@@ -222,7 +224,7 @@ public class Anki4j implements AnkiCollection {
                                     String name = deckNode.get("name").asText();
                                     Deck d = new Deck(deckId, name);
                                     d.setContext(this);
-                                    return d;
+                                    return Optional.of(d);
                                 }
                             } catch (Exception e) {
                                 throw new AnkiException("Failed to parse decks JSON from col table", e);
@@ -234,7 +236,7 @@ public class Anki4j implements AnkiCollection {
         } catch (SQLException e) {
             throw new AnkiException("Failed to query deck by id: " + deckId, e);
         }
-        return null;
+        return Optional.empty();
     }
 
     public List<Card> getCards(long deckId) {
@@ -265,7 +267,7 @@ public class Anki4j implements AnkiCollection {
         return cards;
     }
 
-    public Card getCard(long cardId) {
+    public Optional<Card> getCard(long cardId) {
         String sql = "SELECT id, nid, did, ord FROM cards WHERE id = ?";
         try (PreparedStatement stmt = connection.prepareStatement(sql)) {
             stmt.setLong(1, cardId);
@@ -277,41 +279,41 @@ public class Anki4j implements AnkiCollection {
                             rs.getLong("did"),
                             rs.getLong("ord"));
                     c.setContext(this);
-                    return c;
+                    return Optional.of(c);
                 }
             }
         } catch (SQLException e) {
             throw new AnkiException("Failed to query card by id: " + cardId, e);
         }
-        return null;
+        return Optional.empty();
     }
 
-    public Note getNoteFromCard(long cardId) {
-        Card card = getCard(cardId);
-        if (card != null) {
-            return getNote(card.getNoteId());
+    public Optional<Note> getNoteFromCard(long cardId) {
+        Optional<Card> card = getCard(cardId);
+        if (card.isPresent()) {
+            return getNote(card.get().getNoteId());
         }
-        return null;
+        return Optional.empty();
     }
 
-    public Note getNote(long noteId) {
+    public Optional<Note> getNote(long noteId) {
         String sql = "SELECT id, guid, flds, mid FROM notes WHERE id = ?";
         try (PreparedStatement stmt = connection.prepareStatement(sql)) {
             stmt.setLong(1, noteId);
             try (ResultSet rs = stmt.executeQuery()) {
                 if (rs.next()) {
-                    return new Note(
+                    return Optional.of(new Note(
                             rs.getLong("id"),
                             rs.getString("guid"),
                             rs.getString("flds"),
-                            rs.getLong("mid"));
+                            rs.getLong("mid")));
                 }
             }
         } catch (SQLException e) {
             throw new AnkiException("Failed to query note by id: " + noteId, e);
         }
-        return null; // Or throw exception if not found, usually null is safer for lazy loading
-                     // integration
+        return Optional.empty(); // Or throw exception if not found, usually null is safer for lazy loading
+        // integration
     }
 
     // Helper to join cards and notes if needed

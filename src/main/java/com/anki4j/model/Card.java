@@ -56,7 +56,7 @@ public class Card implements Serializable {
         this.context = context;
     }
 
-    public Note getNote() {
+    public java.util.Optional<Note> getNote() {
         if (context == null) {
             throw new IllegalStateException("AnkiCollection context not set on this Card. Cannot lazy load note.");
         }

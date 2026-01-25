@@ -134,8 +134,9 @@ public class Anki4jTest {
             Card card = cards.get(0);
 
             // Verify Note retrieval via Card
-            Note note = card.getNote();
-            assertNotNull(note);
+            java.util.Optional<Note> noteOpt = card.getNote();
+            assertTrue(noteOpt.isPresent());
+            Note note = noteOpt.get();
             assertEquals("Front\u001fBack", note.getFields());
             assertEquals("Front", note.getTitle());
             assertEquals("Back", note.getContent());
@@ -150,21 +151,21 @@ public class Anki4jTest {
     public void testCollectionMethods() {
         try (AnkiCollection anki = Anki4j.read(apkgPath.toString())) {
             // Test getDeck
-            Deck deck = anki.getDeck(100);
-            assertNotNull(deck);
-            assertEquals("Test Deck", deck.getName());
+            java.util.Optional<Deck> deck = anki.getDeck(100);
+            assertTrue(deck.isPresent());
+            assertEquals("Test Deck", deck.get().getName());
 
             // Test getCard
-            Card card = anki.getCard(1000);
-            assertNotNull(card);
-            assertEquals(100, card.getDeckId());
-            assertEquals(10, card.getNoteId());
+            java.util.Optional<Card> card = anki.getCard(1000);
+            assertTrue(card.isPresent());
+            assertEquals(100, card.get().getDeckId());
+            assertEquals(10, card.get().getNoteId());
 
             // Test getNoteFromCard
-            Note note = anki.getNoteFromCard(1000);
-            assertNotNull(note);
-            assertEquals(10, note.getId());
-            assertEquals("Front", note.getTitle());
+            java.util.Optional<Note> note = anki.getNoteFromCard(1000);
+            assertTrue(note.isPresent());
+            assertEquals(10, note.get().getId());
+            assertEquals("Front", note.get().getTitle());
 
         } catch (Exception e) {
             e.printStackTrace();
@@ -243,8 +244,9 @@ public class Anki4jTest {
         try (Anki4j anki = Anki4j.read(apkgPath.toString())) {
 
             // Check Note References
-            Note note = anki.getNote(500);
-            assertNotNull(note);
+            java.util.Optional<Note> noteOpt = anki.getNote(500);
+            assertTrue(noteOpt.isPresent());
+            Note note = noteOpt.get();
 
             List<String> mediaRefs = note.getMediaReferences();
             assertEquals(2, mediaRefs.size());

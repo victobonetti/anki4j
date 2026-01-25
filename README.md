@@ -46,12 +46,23 @@ try (Anki4j anki = Anki4j.read("/path/to/my-deck.apkg")) {
         
         for (Card card : cards) {
             // Lazy load the note for this card
-            Note note = card.getNote();
-            if (note != null) {
+            java.util.Optional<Note> noteOpt = card.getNote();
+            noteOpt.ifPresent(note -> {
                 // Use helper methods to access Front (Title) and Back (Content)
                 System.out.println("    Front: " + note.getTitle());
                 System.out.println("    Back:  " + note.getContent());
-            }
+                
+                // Access media
+                if (!note.getMediaReferences().isEmpty()) {
+                    System.out.println("    Media: " + note.getMediaReferences());
+                }
+
+                Optional<byte[]> mediaBytes = anki.getMediaContent(note.getMediaReferences().get(0));
+
+                mediaBytes.ifPresent(bytes -> {
+                    System.out.println("Media read test: " + bytes.length);
+                });
+            });
         }
     }
 
@@ -85,7 +96,7 @@ Represents a single flashcard (a specific facet of a note).
 | `noteId` | `long` | ID of the source Note (the content container). |
 | `deckId` | `long` | ID of the Deck this card currently resides in. |
 | `ordinal` | `long` | Index of the card template (0 for first card type, 1 for second, etc.). Identifies which "side" or variant of the note this card represents. |
-| `getNote()` | `Note` | Lazy-loaded reference to the parent Note. |
+| `getNote()` | `Optional<Note>` | Lazy-loaded reference to the parent Note. |
 
 ### Note
 Represents the core data entry (the "fact") independent of how it's displayed.

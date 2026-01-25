@@ -5,19 +5,20 @@ import com.anki4j.model.Deck;
 import com.anki4j.model.Note;
 
 import java.util.List;
+import java.util.Optional;
 
 public interface AnkiCollection extends AutoCloseable {
     List<Deck> getDecks();
 
-    Deck getDeck(long deckId);
+    Optional<Deck> getDeck(long deckId);
 
     List<Card> getCards(long deckId);
 
-    Card getCard(long cardId);
+    Optional<Card> getCard(long cardId);
 
-    Note getNote(long noteId);
+    Optional<Note> getNote(long noteId);
 
-    Note getNoteFromCard(long cardId);
+    Optional<Note> getNoteFromCard(long cardId);
 
     byte[] getMediaContent(String filename);
 }
