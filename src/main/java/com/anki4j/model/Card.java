@@ -50,15 +50,15 @@ public class Card implements Serializable {
         this.ordinal = ordinal;
     }
 
-    private transient com.anki4j.Anki4j context;
+    private transient com.anki4j.AnkiCollection context;
 
-    public void setContext(com.anki4j.Anki4j context) {
+    public void setContext(com.anki4j.AnkiCollection context) {
         this.context = context;
     }
 
     public Note getNote() {
         if (context == null) {
-            throw new IllegalStateException("Anki4j context not set on this Card. Cannot lazy load note.");
+            throw new IllegalStateException("AnkiCollection context not set on this Card. Cannot lazy load note.");
         }
         return context.getNote(this.noteId);
     }

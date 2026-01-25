@@ -30,15 +30,15 @@ public class Deck implements Serializable {
         this.name = name;
     }
 
-    private transient com.anki4j.Anki4j context;
+    private transient com.anki4j.AnkiCollection context;
 
-    public void setContext(com.anki4j.Anki4j context) {
+    public void setContext(com.anki4j.AnkiCollection context) {
         this.context = context;
     }
 
     public java.util.List<Card> getCards() {
         if (context == null) {
-            throw new IllegalStateException("Anki4j context not set on this Deck. Cannot lazy load cards.");
+            throw new IllegalStateException("AnkiCollection context not set on this Deck. Cannot lazy load cards.");
         }
         return context.getCards(this.id);
     }

@@ -24,7 +24,7 @@ import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class Anki4j implements AutoCloseable {
+public class Anki4j implements AnkiCollection {
 
     private static final Logger logger = LoggerFactory.getLogger(Anki4j.class);
 
