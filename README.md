@@ -48,10 +48,9 @@ try (Anki4j anki = Anki4j.read("/path/to/my-deck.apkg")) {
             // Lazy load the note for this card
             Note note = card.getNote();
             if (note != null) {
-                String[] fields = note.getFieldParts();
-                if (fields.length > 0) {
-                     System.out.println("    Front: " + fields[0]);
-                }
+                // Use helper methods to access Front (Title) and Back (Content)
+                System.out.println("    Front: " + note.getTitle());
+                System.out.println("    Back:  " + note.getContent());
             }
         }
     }
@@ -66,3 +65,35 @@ try (Anki4j anki = Anki4j.read("/path/to/my-deck.apkg")) {
 -   **Java 21**
 -   **SQLite JDBC**: For direct access to the Anki database structure.
 -   **Jackson**: For parsing legacy JSON-encoded deck configurations.
+-   **SLF4J**: For unified logging.
+
+## 📚 Data Dictionary
+
+### Deck
+Represents a collection of cards.
+| Field | Type | Description |
+|---|---|---|
+| `id` | `long` | Unique identifier (epoch timestamp in older versions, random in newer). |
+| `name` | `String` | The name of the deck (e.g., "Japanese::Vocabulary"). |
+| `getCards()` | `List<Card>` | Lazy-loaded list of cards belonging to this deck. |
+
+### Card
+Represents a single flashcard (a specific facet of a note).
+| Field | Type | Description |
+|---|---|---|
+| `id` | `long` | Unique identifier for the card. |
+| `noteId` | `long` | ID of the source Note (the content container). |
+| `deckId` | `long` | ID of the Deck this card currently resides in. |
+| `ordinal` | `long` | Index of the card template (0 for first card type, 1 for second, etc.). Identifies which "side" or variant of the note this card represents. |
+| `getNote()` | `Note` | Lazy-loaded reference to the parent Note. |
+
+### Note
+Represents the core data entry (the "fact") independent of how it's displayed.
+| Field | Type | Description |
+|---|---|---|
+| `id` | `long` | Unique identifier (often creation timestamp). |
+| `guid` | `String` | Globally Unique ID used for syncing. |
+| `modelId` | `long` | ID of the Note Type (Model) that defines schema/fields. |
+| `fields` | `String` | Raw string concatenation of all field values, separated by `0x1F` (Unit Separator). |
+| `getTitle()`| `String` | Convenience method to get the first field (usually "Front"). |
+| `getContent()`| `String` | Convenience method to get the second field (usually "Back"). |

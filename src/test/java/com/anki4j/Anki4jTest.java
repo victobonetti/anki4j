@@ -133,10 +133,12 @@ public class Anki4jTest {
             assertEquals(1, cards.size());
             Card card = cards.get(0);
 
-            // Lazy load note
-            Note note = card.getNote();
-            assertNotNull(note);
-            assertEquals("Front", note.getFieldParts()[0]);
+            // Verify Notes
+            List<Note> notes = anki.getNotes();
+            assertEquals(1, notes.size());
+            assertEquals("Front\u001fBack", notes.get(0).getFields());
+            assertEquals("Front", notes.get(0).getTitle());
+            assertEquals("Back", notes.get(0).getContent());
 
         } catch (Exception e) {
             e.printStackTrace();
