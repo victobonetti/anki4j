@@ -65,6 +65,10 @@ public class Card implements Serializable {
 
     @Override
     public String toString() {
-        return "Card{id=" + id + ", noteId=" + noteId + ", deckId=" + deckId + ", ordinal=" + ordinal + "}";
+        try {
+            return new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(this);
+        } catch (Exception e) {
+            return super.toString();
+        }
     }
 }

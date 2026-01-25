@@ -20,7 +20,12 @@ import java.util.zip.ZipInputStream;
 import java.util.Iterator;
 import java.util.Map;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 public class Anki4j implements AutoCloseable {
+
+    private static final Logger logger = LoggerFactory.getLogger(Anki4j.class);
 
     private final Path tempDir;
     private final Connection connection;
@@ -228,7 +233,7 @@ public class Anki4j implements AutoCloseable {
                 connection.close();
             }
         } catch (SQLException e) {
-            System.err.println("Failed to close database connection: " + e.getMessage());
+            logger.error("Failed to close database connection: {}", e.getMessage());
         }
 
         silentDeleteDir(tempDir);

@@ -45,6 +45,10 @@ public class Deck implements Serializable {
 
     @Override
     public String toString() {
-        return "Deck{id=" + id + ", name='" + name + "'}";
+        try {
+            return new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(this);
+        } catch (Exception e) {
+            return super.toString();
+        }
     }
 }

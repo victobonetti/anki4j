@@ -59,6 +59,10 @@ public class Note implements Serializable {
 
     @Override
     public String toString() {
-        return "Note{id=" + id + ", guid='" + guid + "'}";
+        try {
+            return new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(this);
+        } catch (Exception e) {
+            return super.toString();
+        }
     }
 }
