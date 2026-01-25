@@ -1,5 +1,6 @@
 package com.anki4j.internal;
 
+import com.anki4j.AnkiCollection;
 import com.anki4j.exception.AnkiException;
 import com.anki4j.model.Note;
 
@@ -10,10 +11,15 @@ public class NoteRepository {
 
     private final Connection connection;
     private final CardRepository cardRepository;
+    private AnkiCollection context;
 
     public NoteRepository(Connection connection, CardRepository cardRepository) {
         this.connection = connection;
         this.cardRepository = cardRepository;
+    }
+
+    public void setContext(AnkiCollection context) {
+        this.context = context;
     }
 
     public Optional<Note> getNote(long noteId) {
@@ -22,11 +28,13 @@ public class NoteRepository {
             stmt.setLong(1, noteId);
             try (ResultSet rs = stmt.executeQuery()) {
                 if (rs.next()) {
-                    return Optional.of(new Note(
+                    Note note = new Note(
                             rs.getLong("id"),
                             rs.getString("guid"),
                             rs.getString("flds"),
-                            rs.getLong("mid")));
+                            rs.getLong("mid"));
+                    note.setContext(context);
+                    return Optional.of(note);
                 }
             }
         } catch (SQLException e) {
@@ -39,4 +47,5 @@ public class NoteRepository {
         return cardRepository.getCard(cardId)
                 .flatMap(card -> getNote(card.getNoteId()));
     }
+
 }

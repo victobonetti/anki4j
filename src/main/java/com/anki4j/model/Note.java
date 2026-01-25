@@ -50,6 +50,19 @@ public class Note implements Serializable {
         this.modelId = modelId;
     }
 
+    private transient com.anki4j.AnkiCollection context;
+
+    public void setContext(com.anki4j.AnkiCollection context) {
+        this.context = context;
+    }
+
+    public java.util.Optional<Model> getModel() {
+        if (context == null) {
+            throw new IllegalStateException("AnkiCollection context not set on this Note. Cannot lazy load model.");
+        }
+        return context.getModel(this.modelId);
+    }
+
     public java.util.List<String> getMediaReferences() {
         java.util.List<String> media = new java.util.ArrayList<>();
         if (fields == null)

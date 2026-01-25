@@ -106,6 +106,7 @@ public final class Anki4j implements AnkiCollection {
             // Set context for lazy loading
             deckRepository.setContext(instance);
             cardRepository.setContext(instance);
+            noteRepository.setContext(instance);
 
             return instance;
 
