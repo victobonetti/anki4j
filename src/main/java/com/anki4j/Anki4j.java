@@ -4,6 +4,10 @@ import com.anki4j.exception.AnkiException;
 import com.anki4j.model.Card;
 import com.anki4j.model.Deck;
 import com.anki4j.model.Note;
+import com.anki4j.model.Model;
+import com.anki4j.model.Template;
+import com.anki4j.service.ModelService;
+import com.anki4j.renderer.Renderer;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -35,6 +39,8 @@ public class Anki4j implements AnkiCollection {
     private final ObjectMapper objectMapper;
     private final ZipFile zipFile;
     private final MediaManager mediaManager;
+    private final ModelService modelService;
+    private final Renderer renderer;
 
     private Anki4j(Path tempDir, Connection connection, ZipFile zipFile, MediaManager mediaManager) {
         this.tempDir = tempDir;
@@ -42,6 +48,8 @@ public class Anki4j implements AnkiCollection {
         this.objectMapper = new ObjectMapper();
         this.zipFile = zipFile;
         this.mediaManager = mediaManager;
+        this.modelService = new ModelService(connection);
+        this.renderer = new Renderer();
     }
 
     public static Anki4j read(String path) {
@@ -321,6 +329,51 @@ public class Anki4j implements AnkiCollection {
     // This is often complex because of templates.
     // We will stick to returning raw objects for Phase 1 unless a specific join
     // method is requested.
+
+    public Optional<Model> getModel(long modelId) {
+        return modelService.getModel(modelId);
+    }
+
+    /**
+     * Renders the card content based on its template.
+     * 
+     * @param card         The card to render
+     * @param questionSide true for question (front), false for answer (back)
+     * @return Rendered HTML content or empty string if components missing
+     */
+    public String render(Card card, boolean questionSide) {
+        Optional<Note> noteOpt = getNoteFromCard(card.getId());
+        if (noteOpt.isEmpty())
+            return "";
+        Note note = noteOpt.get();
+
+        Optional<Model> modelOpt = getModel(note.getModelId());
+        if (modelOpt.isEmpty())
+            return "";
+        Model model = modelOpt.get();
+
+        // Find the template corresponding to the card's ordinal
+        // The 'ord' in card corresponds to the index in model's templates list?
+        // Usually yes, but better to check template 'ord' if available, or list index.
+        // Anki docs say: "The ordinal of the card template. 0 for the first card
+        // type..."
+        int ord = (int) card.getOrdinal();
+
+        Template template = null;
+        if (model.getTmpls() != null && ord < model.getTmpls().size()) {
+            template = model.getTmpls().get(ord);
+            // Verify ordinal just in case? Usually list index matches ord.
+        }
+
+        if (template == null)
+            return "";
+
+        if (questionSide) {
+            return renderer.renderQuestion(note, model, template);
+        } else {
+            return renderer.renderAnswer(note, model, template);
+        }
+    }
 
     @Override
     public void close() {

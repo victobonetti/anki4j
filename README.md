@@ -70,6 +70,22 @@ try (Anki4j anki = Anki4j.read("/path/to/my-deck.apkg")) {
     e.printStackTrace();
 }
 ```
+### Rendering Cards (Templates)
+
+Anki4j includes a lightweight template engine to render the Question and Answer sides of a card, automatically handling field substitution and basic special tags (like `{{FrontSide}}`, `{{cloze:}}`, `{{type:}}`).
+
+```java
+// Inside the loop...
+for (Card card : cards) {
+    // Render the Question side (Front)
+    String questionHtml = anki.render(card, true);
+    System.out.println("Question HTML: " + questionHtml);
+
+    // Render the Answer side (Back)
+    String answerHtml = anki.render(card, false);
+    System.out.println("Answer HTML: " + answerHtml);
+}
+```
 
 ## 🛠 Tech Stack
 
