@@ -188,10 +188,6 @@ public class Anki4j implements AutoCloseable {
         return decks;
     }
 
-    public List<Card> getCards() {
-        return getCards(-1); // -1 means all
-    }
-
     public List<Card> getCards(long deckId) {
         List<Card> cards = new ArrayList<>();
         String sql = "SELECT id, nid, did, ord FROM cards";
@@ -218,24 +214,6 @@ public class Anki4j implements AutoCloseable {
             throw new AnkiException("Failed to query cards", e);
         }
         return cards;
-    }
-
-    public List<Note> getNotes() {
-        List<Note> notes = new ArrayList<>();
-        String sql = "SELECT id, guid, flds, mid FROM notes";
-        try (Statement stmt = connection.createStatement();
-                ResultSet rs = stmt.executeQuery(sql)) {
-            while (rs.next()) {
-                notes.add(new Note(
-                        rs.getLong("id"),
-                        rs.getString("guid"),
-                        rs.getString("flds"),
-                        rs.getLong("mid")));
-            }
-        } catch (SQLException e) {
-            throw new AnkiException("Failed to query notes", e);
-        }
-        return notes;
     }
 
     public Note getNote(long noteId) {
