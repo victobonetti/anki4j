@@ -66,7 +66,7 @@ public final class Anki4j implements AnkiCollection {
         this.ankiWriter = ankiWriter;
     }
 
-    static Anki4j read(String path) {
+    public static Anki4j read(String path) {
         Path apkgPath = Paths.get(path);
         if (!Files.exists(apkgPath)) {
             throw new AnkiException("File not found: " + path);
