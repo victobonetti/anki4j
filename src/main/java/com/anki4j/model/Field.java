@@ -7,6 +7,9 @@ public class Field {
     private String name;
     private int ord;
 
+    public Field() {
+    }
+
     // Getters and Setters
     public String getName() {
         return name;

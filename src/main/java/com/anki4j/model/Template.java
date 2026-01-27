@@ -9,6 +9,9 @@ public class Template {
     private String afmt;
     private Integer ord;
 
+    public Template() {
+    }
+
     // Getters and Setters
     public String getName() {
         return name;

@@ -1,6 +1,10 @@
 package com.anki4j.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import java.io.Serializable;
+
+@JsonIgnoreProperties(ignoreUnknown = true)
 
 public class Note implements Serializable {
     private long id;
@@ -52,10 +56,12 @@ public class Note implements Serializable {
 
     private transient com.anki4j.AnkiCollection context;
 
+    @JsonIgnore
     public void setContext(com.anki4j.AnkiCollection context) {
         this.context = context;
     }
 
+    @JsonIgnore
     public java.util.Optional<Model> getModel() {
         if (context == null) {
             throw new IllegalStateException("AnkiCollection context not set on this Note. Cannot lazy load model.");
@@ -65,6 +71,7 @@ public class Note implements Serializable {
 
     private transient NoteFieldsMap fieldsMap;
 
+    @JsonIgnore
     public NoteFieldsMap getFieldsMap() {
         if (fieldsMap == null) {
             Model model = getModel().orElseThrow(() -> new IllegalStateException("Model not found for this Note."));
@@ -74,11 +81,13 @@ public class Note implements Serializable {
     }
 
     /** Internal use for persistence */
+    @JsonIgnore
     public void _setRawFields(String fields) {
         this.fields = fields;
         this.fieldsMap = null; // Invalidate map if raw string changes
     }
 
+    @JsonIgnore
     public java.util.List<String> getMediaReferences() {
         java.util.List<String> media = new java.util.ArrayList<>();
         if (fields == null)

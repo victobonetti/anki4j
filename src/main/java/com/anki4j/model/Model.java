@@ -11,6 +11,9 @@ public class Model {
     private List<Template> tmpls;
     private String css;
 
+    public Model() {
+    }
+
     // Getters and Setters
     public long getId() {
         return id;
