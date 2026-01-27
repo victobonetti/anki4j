@@ -22,6 +22,7 @@ public class MediaManager {
     private ZipFile zipFile;
 
     public MediaManager() {
+        logger.info("Initializing MediaManager");
         this.objectMapper = new ObjectMapper();
     }
 

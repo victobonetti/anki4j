@@ -5,6 +5,8 @@ import com.anki4j.model.Model;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.sql.Connection;
 import java.sql.ResultSet;
@@ -16,11 +18,13 @@ import java.util.Map;
 import java.util.Optional;
 
 public class ModelService {
+    private static final Logger logger = LoggerFactory.getLogger(ModelService.class);
 
     private final Map<Long, Model> modelCache = new HashMap<>();
     private final ObjectMapper objectMapper;
 
     public ModelService(Connection connection) {
+        logger.info("Initializing ModelService");
         this.objectMapper = new ObjectMapper();
         loadModels(connection);
     }

@@ -4,21 +4,27 @@ import com.anki4j.AnkiCollection;
 import com.anki4j.exception.AnkiException;
 import com.anki4j.model.Card;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
 public class CardRepository {
+    private static final Logger logger = LoggerFactory.getLogger(CardRepository.class);
 
     private final Connection connection;
     private AnkiCollection context;
 
     public CardRepository(Connection connection) {
+        logger.info("Initializing CardRepository");
         this.connection = connection;
     }
 
     public void setContext(AnkiCollection context) {
+        logger.info("Setting context for CardRepository");
         this.context = context;
     }
 

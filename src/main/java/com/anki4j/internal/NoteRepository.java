@@ -3,22 +3,27 @@ package com.anki4j.internal;
 import com.anki4j.AnkiCollection;
 import com.anki4j.exception.AnkiException;
 import com.anki4j.model.Note;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.sql.*;
 import java.util.Optional;
 
 public class NoteRepository {
+    private static final Logger logger = LoggerFactory.getLogger(NoteRepository.class);
 
     private final Connection connection;
     private final CardRepository cardRepository;
     private AnkiCollection context;
 
     public NoteRepository(Connection connection, CardRepository cardRepository) {
+        logger.info("Initializing NoteRepository");
         this.connection = connection;
         this.cardRepository = cardRepository;
     }
 
     public void setContext(AnkiCollection context) {
+        logger.info("Setting context for NoteRepository");
         this.context = context;
     }
 

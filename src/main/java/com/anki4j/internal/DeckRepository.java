@@ -5,6 +5,8 @@ import com.anki4j.exception.AnkiException;
 import com.anki4j.model.Deck;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.sql.*;
 import java.util.ArrayList;
@@ -14,17 +16,20 @@ import java.util.Map;
 import java.util.Optional;
 
 public class DeckRepository {
+    private static final Logger logger = LoggerFactory.getLogger(DeckRepository.class);
 
     private final Connection connection;
     private final ObjectMapper objectMapper;
     private AnkiCollection context;
 
     public DeckRepository(Connection connection) {
+        logger.info("Initializing DeckRepository");
         this.connection = connection;
         this.objectMapper = new ObjectMapper();
     }
 
     public void setContext(AnkiCollection context) {
+        logger.info("Setting context for DeckRepository");
         this.context = context;
     }
 

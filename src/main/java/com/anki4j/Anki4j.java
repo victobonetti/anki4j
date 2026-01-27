@@ -53,6 +53,7 @@ public final class Anki4j implements AnkiCollection {
             NoteRepository noteRepository, ModelService modelService,
             MediaManager mediaManager, RenderService renderService,
             AnkiWriter ankiWriter) {
+        logger.info("Initializing Anki4j instance for path: {}", originalPath);
         this.originalPath = originalPath;
         this.tempDir = tempDir;
         this.connection = connection;

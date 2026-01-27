@@ -2,16 +2,20 @@ package com.anki4j.internal;
 
 import com.anki4j.exception.AnkiException;
 import com.anki4j.model.Note;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
 
 public class AnkiWriter {
+    private static final Logger logger = LoggerFactory.getLogger(AnkiWriter.class);
 
     private final Connection connection;
 
     public AnkiWriter(Connection connection) {
+        logger.info("Initializing AnkiWriter");
         this.connection = connection;
     }
 
