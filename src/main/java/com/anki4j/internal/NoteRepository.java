@@ -28,6 +28,7 @@ public class NoteRepository {
     }
 
     public Optional<Note> getNote(long noteId) {
+        logger.info("Fetching note with ID: {}", noteId);
         String sql = "SELECT id, guid, flds, mid FROM notes WHERE id = ?";
         try (PreparedStatement stmt = connection.prepareStatement(sql)) {
             stmt.setLong(1, noteId);
@@ -39,16 +40,20 @@ public class NoteRepository {
                             rs.getString("flds"),
                             rs.getLong("mid"));
                     note.setContext(context);
+                    logger.info("Note found: {}", noteId);
                     return Optional.of(note);
                 }
             }
+            logger.info("Note not found: {}", noteId);
         } catch (SQLException e) {
+            logger.error("Failed to query note by ID {}: {}", noteId, e.getMessage());
             throw new AnkiException("Failed to query note by id: " + noteId, e);
         }
         return Optional.empty();
     }
 
     public Optional<Note> getNoteFromCard(long cardId) {
+        logger.info("Fetching note associated with card ID: {}", cardId);
         return cardRepository.getCard(cardId)
                 .flatMap(card -> getNote(card.getNoteId()));
     }

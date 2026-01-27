@@ -29,6 +29,7 @@ public class CardRepository {
     }
 
     public List<Card> getCards(long deckId) {
+        logger.info("Fetching cards for deck ID: {}", deckId);
         List<Card> cards = new ArrayList<>();
         String sql = "SELECT id, nid, did, ord FROM cards";
         if (deckId != -1) {
@@ -50,13 +51,16 @@ public class CardRepository {
                     cards.add(c);
                 }
             }
+            logger.info("Found {} cards", cards.size());
         } catch (SQLException e) {
+            logger.error("Failed to query cards: {}", e.getMessage());
             throw new AnkiException("Failed to query cards", e);
         }
         return cards;
     }
 
     public Optional<Card> getCard(long cardId) {
+        logger.info("Fetching card with ID: {}", cardId);
         String sql = "SELECT id, nid, did, ord FROM cards WHERE id = ?";
         try (PreparedStatement stmt = connection.prepareStatement(sql)) {
             stmt.setLong(1, cardId);
@@ -68,10 +72,13 @@ public class CardRepository {
                             rs.getLong("did"),
                             rs.getLong("ord"));
                     c.setContext(context);
+                    logger.info("Card found: {}", cardId);
                     return Optional.of(c);
                 }
             }
+            logger.info("Card not found: {}", cardId);
         } catch (SQLException e) {
+            logger.error("Failed to query card by ID {}: {}", cardId, e.getMessage());
             throw new AnkiException("Failed to query card by id: " + cardId, e);
         }
         return Optional.empty();

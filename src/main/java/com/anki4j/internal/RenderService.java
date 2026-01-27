@@ -26,14 +26,19 @@ public class RenderService {
     }
 
     public Optional<RenderedCard> renderCard(Card card) {
+        logger.info("Rendering card ID: {} (ordinal: {})", card.getId(), card.getOrdinal());
         Optional<Note> noteOpt = noteRepository.getNoteFromCard(card.getId());
-        if (noteOpt.isEmpty())
+        if (noteOpt.isEmpty()) {
+            logger.warn("Could not find note for card ID: {}", card.getId());
             return Optional.empty();
+        }
         Note note = noteOpt.get();
 
         Optional<Model> modelOpt = modelService.getModel(note.getModelId());
-        if (modelOpt.isEmpty())
+        if (modelOpt.isEmpty()) {
+            logger.warn("Could not find model ID {} for note ID {}", note.getModelId(), note.getId());
             return Optional.empty();
+        }
         Model model = modelOpt.get();
 
         int ord = (int) card.getOrdinal();
@@ -42,9 +47,12 @@ public class RenderService {
             template = model.getTmpls().get(ord);
         }
 
-        if (template == null)
+        if (template == null) {
+            logger.warn("Could not find template for ordinal {} in model {}", ord, model.getName());
             return Optional.empty();
+        }
 
+        logger.info("Successfully rendered card ID: {}", card.getId());
         return Optional.of(renderer.renderCard(note, model, template));
     }
 }

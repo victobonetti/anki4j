@@ -30,6 +30,7 @@ public class ModelService {
     }
 
     private void loadModels(Connection connection) {
+        logger.info("Loading models from database");
         try (Statement stmt = connection.createStatement();
                 ResultSet rs = stmt.executeQuery("SELECT models FROM col LIMIT 1")) {
 
@@ -49,16 +50,26 @@ public class ModelService {
                             modelCache.put(id, model);
                         }
                     } catch (JsonProcessingException e) {
+                        logger.error("Failed to parse models JSON: {}", e.getMessage());
                         throw new AnkiException("Failed to parse models JSON", e);
                     }
                 }
             }
+            logger.info("Loaded {} models into cache", modelCache.size());
         } catch (SQLException e) {
+            logger.error("Failed to load models from database: {}", e.getMessage());
             throw new AnkiException("Failed to load models from database", e);
         }
     }
 
     public Optional<Model> getModel(long modelId) {
-        return Optional.ofNullable(modelCache.get(modelId));
+        logger.info("Fetching model with ID: {}", modelId);
+        Model model = modelCache.get(modelId);
+        if (model != null) {
+            logger.info("Model found in cache: {}", modelId);
+        } else {
+            logger.info("Model not found in cache: {}", modelId);
+        }
+        return Optional.ofNullable(model);
     }
 }

@@ -21,9 +21,11 @@ public class AnkiWriter {
 
     public void save(Note note) {
         if (!note.getFieldsMap().isDirty()) {
+            logger.info("Note ID {} is not dirty, skipping save", note.getId());
             return;
         }
 
+        logger.info("Saving changes for note ID: {}", note.getId());
         String rawFields = note.getFieldsMap().toRawString();
         long mod = System.currentTimeMillis();
 
@@ -35,8 +37,11 @@ public class AnkiWriter {
 
             int affected = pstmt.executeUpdate();
             if (affected == 0) {
+                logger.error("Failed to update note ID {}: Note not found", note.getId());
                 throw new AnkiException("Failed to update note: Note with ID " + note.getId() + " not found.");
             }
+
+            logger.info("Successfully updated note ID {} in database", note.getId());
 
             // Sync domain object back after successful DB update
             note._setRawFields(rawFields);
@@ -52,6 +57,7 @@ public class AnkiWriter {
             // but re-parsing is safer for consistency.
 
         } catch (SQLException e) {
+            logger.error("Error saving note ID {}: {}", note.getId(), e.getMessage());
             throw new AnkiException("Failed to save note to database", e);
         }
     }

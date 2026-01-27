@@ -34,12 +34,14 @@ public class DeckRepository {
     }
 
     public List<Deck> getDecks() {
+        logger.info("Fetching all decks");
         List<Deck> decks = new ArrayList<>();
 
         try (Statement stmt = connection.createStatement()) {
             boolean decksTableExists = tableExists("decks");
 
             if (decksTableExists) {
+                logger.info("Reading decks from 'decks' table");
                 try (ResultSet rs = stmt.executeQuery("SELECT id, name FROM decks")) {
                     while (rs.next()) {
                         Deck d = new Deck(rs.getLong("id"), rs.getString("name"));
@@ -50,6 +52,7 @@ public class DeckRepository {
             } else {
                 // Fallback: In older Anki versions, decks are in the 'col' table as a JSON
                 // string.
+                logger.info("Reading decks from 'col' table (legacy mode)");
                 try (ResultSet rs = stmt.executeQuery("SELECT decks FROM col LIMIT 1")) {
                     if (rs.next()) {
                         String json = rs.getString("decks");
@@ -68,13 +71,16 @@ public class DeckRepository {
                     }
                 }
             }
+            logger.info("Found {} decks", decks.size());
         } catch (Exception e) {
+            logger.error("Failed to query decks: {}", e.getMessage());
             throw new AnkiException("Failed to query decks", e);
         }
         return decks;
     }
 
     public Optional<Deck> getDeck(long deckId) {
+        logger.info("Fetching deck with ID: {}", deckId);
         try (Statement stmt = connection.createStatement()) {
             boolean decksTableExists = tableExists("decks");
 
@@ -85,6 +91,7 @@ public class DeckRepository {
                         if (rs.next()) {
                             Deck d = new Deck(rs.getLong("id"), rs.getString("name"));
                             d.setContext(context);
+                            logger.info("Deck found: {}", deckId);
                             return Optional.of(d);
                         }
                     }
@@ -101,13 +108,16 @@ public class DeckRepository {
                                 String name = deckNode.get("name").asText();
                                 Deck d = new Deck(deckId, name);
                                 d.setContext(context);
+                                logger.info("Deck found: {}", deckId);
                                 return Optional.of(d);
                             }
                         }
                     }
                 }
             }
+            logger.info("Deck not found: {}", deckId);
         } catch (Exception e) {
+            logger.error("Failed to query deck by ID {}: {}", deckId, e.getMessage());
             throw new AnkiException("Failed to query deck by id: " + deckId, e);
         }
         return Optional.empty();
