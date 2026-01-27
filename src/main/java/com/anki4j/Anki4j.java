@@ -67,15 +67,19 @@ public final class Anki4j implements AnkiCollection {
     }
 
     public static Anki4j read(String path) {
+        logger.info("Opening Anki file: {}", path);
         Path apkgPath = Paths.get(path);
         if (!Files.exists(apkgPath)) {
+            logger.error("File not found: {}", path);
             throw new AnkiException("File not found: " + path);
         }
 
         Path tempDir;
         try {
             tempDir = Files.createTempDirectory("anki4j_" + UUID.randomUUID());
+            logger.info("Created temporary directory: {}", tempDir);
         } catch (IOException e) {
+            logger.error("Failed to create temporary directory", e);
             throw new AnkiException("Failed to create temporary directory", e);
         }
 
@@ -97,9 +101,11 @@ public final class Anki4j implements AnkiCollection {
 
             // Connect to SQLite
             String url = "jdbc:sqlite:" + dbFile.toAbsolutePath();
+            logger.info("Connecting to SQLite database: {}", url);
             Connection conn = DriverManager.getConnection(url);
 
             // Initialize services
+            logger.info("Initializing services...");
             MediaManager mediaManager = new MediaManager();
             mediaManager.loadMap(zip);
 
@@ -142,10 +148,13 @@ public final class Anki4j implements AnkiCollection {
         ZipEntry target = entry21 != null ? entry21 : entry20;
 
         if (target != null) {
+            logger.debug("Extracting database: {}", target.getName());
             Path outFile = outputDir.resolve(target.getName());
             try (InputStream is = zip.getInputStream(target)) {
                 Files.copy(is, outFile, StandardCopyOption.REPLACE_EXISTING);
             }
+        } else {
+            logger.warn("No database file (collection.anki2 or collection.anki21) found in the archive");
         }
     }
 
@@ -163,6 +172,7 @@ public final class Anki4j implements AnkiCollection {
 
     @Override
     public List<Card> getCards(long deckId) {
+        logger.debug("Fetching cards for deck ID: {}", deckId);
         return cardRepository.getCards(deckId);
     }
 
@@ -198,6 +208,7 @@ public final class Anki4j implements AnkiCollection {
 
     @Override
     public void save(Note note) {
+        logger.info("Saving note ID: {}", note.getId());
         ankiWriter.save(note);
         this.dirty = true;
     }
@@ -206,8 +217,10 @@ public final class Anki4j implements AnkiCollection {
 
     @Override
     public void close() {
+        logger.info("Closing Anki4j session for: {}", originalPath);
         try {
             if (connection != null && !connection.isClosed()) {
+                logger.debug("Closing database connection");
                 connection.close();
             }
         } catch (SQLException e) {
@@ -216,6 +229,7 @@ public final class Anki4j implements AnkiCollection {
 
         if (dirty) {
             try {
+                logger.info("Changes detected, persisting to APKG...");
                 persistChanges();
             } catch (IOException e) {
                 logger.error("Failed to persist changes to APKG file: {}", e.getMessage());
@@ -225,12 +239,14 @@ public final class Anki4j implements AnkiCollection {
 
         try {
             if (zipFile != null) {
+                logger.debug("Closing original zip file");
                 zipFile.close();
             }
         } catch (IOException e) {
             logger.error("Failed to close zip file: {}", e.getMessage());
         }
 
+        logger.debug("Deleting temporary directory: {}", tempDir);
         silentDeleteDir(tempDir);
     }
 
