@@ -54,7 +54,7 @@ public class Anki4jTest {
     private void createSyntheticApkg() throws Exception {
         // 1. Create a temporary SQLite DB
         Path dbPath = tempTestDir.resolve("collection.anki2");
-        Files.deleteIfExists(dbPath); // Fix: Ensure clean database for each call
+        Files.deleteIfExists(dbPath);
         String url = "jdbc:sqlite:" + dbPath.toAbsolutePath();
 
         try (Connection conn = DriverManager.getConnection(url);
@@ -306,6 +306,34 @@ public class Anki4jTest {
             assertEquals("Updated Front", note.getFieldsMap().get("Front"));
             assertEquals("Updated Back", note.getFieldsMap().get("Back"));
             assertEquals("Updated Front\u001fUpdated Back", note.getFields());
+        }
+    }
+
+    @Test
+    public void testReadFromInputStream() throws Exception {
+        try (java.io.InputStream is = Files.newInputStream(apkgPath);
+                AnkiCollection anki = AnkiCollection.read(is)) {
+            List<Deck> decks = anki.getDecks();
+            assertFalse("Decks should not be empty when reading from InputStream", decks.isEmpty());
+            assertTrue("Should contain 'Test Deck'", decks.stream().anyMatch(d -> d.getName().equals("Test Deck")));
+
+            // Verify content
+            Optional<Card> card = anki.getCard(1000);
+            assertTrue(card.isPresent());
+        }
+    }
+
+    @Test
+    public void testReadFromByteArray() throws Exception {
+        byte[] data = Files.readAllBytes(apkgPath);
+        try (AnkiCollection anki = AnkiCollection.read(data)) {
+            List<Deck> decks = anki.getDecks();
+            assertFalse("Decks should not be empty when reading from byte array", decks.isEmpty());
+            assertTrue("Should contain 'Test Deck'", decks.stream().anyMatch(d -> d.getName().equals("Test Deck")));
+
+            // Verify content
+            Optional<Card> card = anki.getCard(1000);
+            assertTrue(card.isPresent());
         }
     }
 }

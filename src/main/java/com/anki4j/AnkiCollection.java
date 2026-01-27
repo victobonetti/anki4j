@@ -15,6 +15,14 @@ public sealed interface AnkiCollection extends AutoCloseable permits Anki4j {
         return Anki4j.read(path);
     }
 
+    static AnkiCollection read(java.io.InputStream inputStream) {
+        return Anki4j.read(inputStream);
+    }
+
+    static AnkiCollection read(byte[] data) {
+        return Anki4j.read(data);
+    }
+
     List<Deck> getDecks();
 
     List<Card> getCards(long deckId);
@@ -34,6 +42,8 @@ public sealed interface AnkiCollection extends AutoCloseable permits Anki4j {
     Optional<RenderedCard> renderCard(Card card);
 
     void save(Note note);
+
+    byte[] export();
 
     void close();
 }

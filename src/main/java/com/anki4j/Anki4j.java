@@ -11,20 +11,13 @@ import com.anki4j.renderer.RenderedCard;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.FileOutputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
-import java.nio.file.*;
-import java.nio.file.attribute.BasicFileAttributes;
-import java.sql.Connection;
-import java.sql.DriverManager;
-import java.sql.SQLException;
-import java.util.Enumeration;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
-import java.util.UUID;
 import java.util.zip.ZipEntry;
-import java.util.zip.ZipFile;
+import java.util.zip.ZipInputStream;
 import java.util.zip.ZipOutputStream;
 
 public final class Anki4j implements AnkiCollection {
@@ -32,10 +25,8 @@ public final class Anki4j implements AnkiCollection {
     private static final Logger logger = LoggerFactory.getLogger(Anki4j.class);
 
     // Resource handles
-    private final Path originalPath;
-    private final Path tempDir;
-    private final Connection connection;
-    private final ZipFile zipFile;
+    private final java.nio.file.Path originalPath;
+    private final java.sql.Connection connection;
 
     // Services
     private final DeckRepository deckRepository;
@@ -48,16 +39,14 @@ public final class Anki4j implements AnkiCollection {
 
     private boolean dirty = false;
 
-    private Anki4j(Path originalPath, Path tempDir, Connection connection, ZipFile zipFile,
+    private Anki4j(java.nio.file.Path originalPath, java.sql.Connection connection,
             DeckRepository deckRepository, CardRepository cardRepository,
             NoteRepository noteRepository, ModelService modelService,
             MediaManager mediaManager, RenderService renderService,
             AnkiWriter ankiWriter) {
-        logger.info("Initializing Anki4j instance for path: {}", originalPath);
+        logger.info("Initializing Anki4j instance");
         this.originalPath = originalPath;
-        this.tempDir = tempDir;
         this.connection = connection;
-        this.zipFile = zipFile;
         this.deckRepository = deckRepository;
         this.cardRepository = cardRepository;
         this.noteRepository = noteRepository;
@@ -68,47 +57,45 @@ public final class Anki4j implements AnkiCollection {
     }
 
     public static Anki4j read(String path) {
-        logger.info("Opening Anki file: {}", path);
-        Path apkgPath = Paths.get(path);
-        if (!Files.exists(apkgPath)) {
-            logger.error("File not found: {}", path);
-            throw new AnkiException("File not found: " + path);
-        }
-
-        Path tempDir;
+        logger.info("Opening Anki file from path: {}", path);
+        java.nio.file.Path apkgPath = java.nio.file.Paths.get(path);
         try {
-            tempDir = Files.createTempDirectory("anki4j_" + UUID.randomUUID());
-            logger.info("Created temporary directory: {}", tempDir);
+            byte[] data = java.nio.file.Files.readAllBytes(apkgPath);
+            Anki4j instance = read(data);
+            return new Anki4j(apkgPath, instance.connection,
+                    instance.deckRepository, instance.cardRepository, instance.noteRepository,
+                    instance.modelService, instance.mediaManager, instance.renderService, instance.ankiWriter);
         } catch (IOException e) {
-            logger.error("Failed to create temporary directory", e);
-            throw new AnkiException("Failed to create temporary directory", e);
+            throw new AnkiException("Failed to read Anki file from path: " + path, e);
         }
+    }
 
-        ZipFile zip = null;
+    public static Anki4j read(java.io.InputStream inputStream) {
         try {
-            zip = new ZipFile(apkgPath.toFile());
+            return read(inputStream.readAllBytes());
+        } catch (IOException e) {
+            throw new AnkiException("Failed to read Anki data from InputStream", e);
+        }
+    }
 
-            // Extract DB
-            extractCollection(zip, tempDir);
+    public static Anki4j read(byte[] data) {
+        logger.info("Opening Anki collection from bytes (length: {})", data.length);
 
-            // Find database file
-            Path dbFile = tempDir.resolve("collection.anki21");
-            if (!Files.exists(dbFile)) {
-                dbFile = tempDir.resolve("collection.anki2");
-            }
-            if (!Files.exists(dbFile)) {
+        try {
+            // 1. Extract database from bytes
+            byte[] dbBytes = extractDatabaseBytes(data);
+            if (dbBytes == null) {
                 throw new AnkiException("Could not find collection.anki2 or collection.anki21 in the archive");
             }
 
-            // Connect to SQLite
-            String url = "jdbc:sqlite:" + dbFile.toAbsolutePath();
-            logger.info("Connecting to SQLite database: {}", url);
-            Connection conn = DriverManager.getConnection(url);
+            // 2. Connect to in-memory SQLite and load data
+            java.sql.Connection conn = java.sql.DriverManager.getConnection("jdbc:sqlite::memory:");
+            loadDatabaseIntoMemory(conn, dbBytes);
 
-            // Initialize services
+            // 3. Initialize services
             logger.info("Initializing services...");
             MediaManager mediaManager = new MediaManager();
-            mediaManager.loadMap(zip);
+            mediaManager.load(data);
 
             CardRepository cardRepository = new CardRepository(conn);
             NoteRepository noteRepository = new NoteRepository(conn, cardRepository);
@@ -117,7 +104,7 @@ public final class Anki4j implements AnkiCollection {
             RenderService renderService = new RenderService(noteRepository, modelService);
             AnkiWriter ankiWriter = new AnkiWriter(conn);
 
-            Anki4j instance = new Anki4j(apkgPath, tempDir, conn, zip,
+            Anki4j instance = new Anki4j(null, conn,
                     deckRepository, cardRepository, noteRepository,
                     modelService, mediaManager, renderService, ankiWriter);
 
@@ -129,33 +116,46 @@ public final class Anki4j implements AnkiCollection {
             return instance;
 
         } catch (Exception e) {
-            if (zip != null) {
-                try {
-                    zip.close();
-                } catch (IOException ignored) {
-                }
-            }
-            silentDeleteDir(tempDir);
             if (e instanceof AnkiException) {
                 throw (AnkiException) e;
             }
-            throw new AnkiException("Failed to read Anki file", e);
+            throw new AnkiException("Failed to initialize Anki4j from bytes", e);
         }
     }
 
-    private static void extractCollection(ZipFile zip, Path outputDir) throws IOException {
-        ZipEntry entry21 = zip.getEntry("collection.anki21");
-        ZipEntry entry20 = zip.getEntry("collection.anki2");
-        ZipEntry target = entry21 != null ? entry21 : entry20;
+    private static byte[] extractDatabaseBytes(byte[] zipData) throws IOException {
+        try (ZipInputStream zis = new ZipInputStream(new java.io.ByteArrayInputStream(zipData))) {
+            ZipEntry entry;
+            byte[] result21 = null;
+            byte[] result20 = null;
 
-        if (target != null) {
-            logger.debug("Extracting database: {}", target.getName());
-            Path outFile = outputDir.resolve(target.getName());
-            try (InputStream is = zip.getInputStream(target)) {
-                Files.copy(is, outFile, StandardCopyOption.REPLACE_EXISTING);
+            while ((entry = zis.getNextEntry()) != null) {
+                if (entry.getName().equals("collection.anki21")) {
+                    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                    zis.transferTo(baos);
+                    result21 = baos.toByteArray();
+                    break;
+                } else if (entry.getName().equals("collection.anki2")) {
+                    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                    zis.transferTo(baos);
+                    result20 = baos.toByteArray();
+                }
+                zis.closeEntry();
             }
-        } else {
-            logger.warn("No database file (collection.anki2 or collection.anki21) found in the archive");
+            return result21 != null ? result21 : result20;
+        }
+    }
+
+    private static void loadDatabaseIntoMemory(java.sql.Connection conn, byte[] dbBytes) throws Exception {
+        logger.info("Loading database bytes into in-memory SQLite");
+        java.nio.file.Path tempFile = java.nio.file.Files.createTempFile("anki4j_db", ".db");
+        try {
+            java.nio.file.Files.write(tempFile, dbBytes);
+            try (java.sql.Statement stmt = conn.createStatement()) {
+                stmt.executeUpdate("restore from " + tempFile.toAbsolutePath());
+            }
+        } finally {
+            java.nio.file.Files.deleteIfExists(tempFile);
         }
     }
 
@@ -218,20 +218,13 @@ public final class Anki4j implements AnkiCollection {
 
     @Override
     public void close() {
-        logger.info("Closing Anki4j session for: {}", originalPath);
-        try {
-            if (connection != null && !connection.isClosed()) {
-                logger.debug("Closing database connection");
-                connection.close();
-            }
-        } catch (SQLException e) {
-            logger.error("Failed to close database connection: {}", e.getMessage());
-        }
+        logger.info("Closing Anki4j session");
 
-        if (dirty) {
+        if (dirty && originalPath != null) {
             try {
-                logger.info("Changes detected, persisting to APKG...");
-                persistChanges();
+                byte[] updated = export();
+                java.nio.file.Files.write(originalPath, updated);
+                logger.info("Updated original APKG file: {}", originalPath);
             } catch (IOException e) {
                 logger.error("Failed to persist changes to APKG file: {}", e.getMessage());
                 throw new AnkiException("Failed to persist changes back to " + originalPath, e);
@@ -239,78 +232,71 @@ public final class Anki4j implements AnkiCollection {
         }
 
         try {
-            if (zipFile != null) {
-                logger.debug("Closing original zip file");
-                zipFile.close();
+            if (connection != null && !connection.isClosed()) {
+                logger.debug("Closing database connection");
+                connection.close();
             }
-        } catch (IOException e) {
-            logger.error("Failed to close zip file: {}", e.getMessage());
+        } catch (java.sql.SQLException e) {
+            logger.error("Failed to close database connection: {}", e.getMessage());
         }
-
-        logger.debug("Deleting temporary directory: {}", tempDir);
-        silentDeleteDir(tempDir);
     }
 
-    private void persistChanges() throws IOException {
-        Path tempApkg = tempDir.resolve("updated.apkg");
-        try (ZipOutputStream zos = new ZipOutputStream(new FileOutputStream(tempApkg.toFile()))) {
-            // 1. Write the current database file(s) from tempDir
-            try (DirectoryStream<Path> stream = Files.newDirectoryStream(tempDir)) {
-                for (Path entry : stream) {
-                    if (Files.isRegularFile(entry) && entry.getFileName().toString().startsWith("collection.anki2")) {
-                        addToZip(entry, entry.getFileName().toString(), zos);
-                    }
-                }
-            }
+    @Override
+    public byte[] export() {
+        logger.info("Exporting collection to APKG bytes");
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        try (ZipOutputStream zos = new ZipOutputStream(baos)) {
+            // 1. Save database to a temporary file and add to zip
+            byte[] dbBytes = backUpMemoryDatabase();
+            zos.putNextEntry(new ZipEntry("collection.anki21"));
+            zos.write(dbBytes);
+            zos.closeEntry();
 
-            // 2. Copy everything else from the original zip
-            Enumeration<? extends ZipEntry> entries = zipFile.entries();
-            while (entries.hasMoreElements()) {
-                ZipEntry entry = entries.nextElement();
-                String name = entry.getName();
-                // Skip the database files we already wrote
-                if (name.equals("collection.anki2") || name.equals("collection.anki21")) {
-                    continue;
-                }
-
-                zos.putNextEntry(new ZipEntry(name));
-                try (InputStream is = zipFile.getInputStream(entry)) {
-                    is.transferTo(zos);
-                }
+            // 2. Add media
+            Map<String, byte[]> mediaEntries = mediaManager.getAllMediaEntries();
+            for (Map.Entry<String, byte[]> entry : mediaEntries.entrySet()) {
+                zos.putNextEntry(new ZipEntry(entry.getKey()));
+                zos.write(entry.getValue());
                 zos.closeEntry();
             }
-        }
 
-        // Replace original file with temporary updated one
-        Files.move(tempApkg, originalPath, StandardCopyOption.REPLACE_EXISTING);
-        logger.info("Successfully updated APKG file: {}", originalPath);
-    }
-
-    private void addToZip(Path file, String name, ZipOutputStream zos) throws IOException {
-        zos.putNextEntry(new ZipEntry(name));
-        Files.copy(file, zos);
-        zos.closeEntry();
-    }
-
-    private static void silentDeleteDir(Path dir) {
-        if (dir == null || !Files.exists(dir))
-            return;
-        try {
-            Files.walkFileTree(dir, new SimpleFileVisitor<>() {
-                @Override
-                public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
-                    Files.delete(file);
-                    return FileVisitResult.CONTINUE;
+            // 3. Add 'media' JSON
+            Map<String, String> filenameToZipName = mediaManager.getFilenameToZipName();
+            if (!filenameToZipName.isEmpty()) {
+                Map<String, String> reversedMediaMap = new java.util.HashMap<>();
+                for (Map.Entry<String, String> entry : filenameToZipName.entrySet()) {
+                    reversedMediaMap.put(entry.getValue(), entry.getKey());
                 }
+                byte[] mediaJson = new com.fasterxml.jackson.databind.ObjectMapper()
+                        .writeValueAsBytes(reversedMediaMap);
+                zos.putNextEntry(new ZipEntry("media"));
+                zos.write(mediaJson);
+                zos.closeEntry();
+            }
 
-                @Override
-                public FileVisitResult postVisitDirectory(Path dir, IOException exc) throws IOException {
-                    Files.delete(dir);
-                    return FileVisitResult.CONTINUE;
-                }
-            });
         } catch (IOException e) {
-            e.printStackTrace();
+            throw new AnkiException("Failed to export APKG", e);
+        }
+        return baos.toByteArray();
+    }
+
+    private byte[] backUpMemoryDatabase() {
+        java.nio.file.Path tempFile = null;
+        try {
+            tempFile = java.nio.file.Files.createTempFile("anki4j_export", ".db");
+            try (java.sql.Statement stmt = connection.createStatement()) {
+                stmt.executeUpdate("backup to " + tempFile.toAbsolutePath());
+            }
+            return java.nio.file.Files.readAllBytes(tempFile);
+        } catch (Exception e) {
+            throw new AnkiException("Failed to backup memory database", e);
+        } finally {
+            if (tempFile != null) {
+                try {
+                    java.nio.file.Files.deleteIfExists(tempFile);
+                } catch (IOException ignored) {
+                }
+            }
         }
     }
 }

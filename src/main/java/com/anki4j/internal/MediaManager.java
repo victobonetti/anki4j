@@ -6,20 +6,22 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.io.InputStream;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Optional;
 import java.util.zip.ZipEntry;
-import java.util.zip.ZipFile;
+import java.util.zip.ZipInputStream;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 
 public class MediaManager {
     private static final Logger logger = LoggerFactory.getLogger(MediaManager.class);
 
     private final Map<String, String> filenameToZipName = new HashMap<>();
+    private final Map<String, byte[]> zipEntryBytes = new HashMap<>();
     private final ObjectMapper objectMapper;
-    private ZipFile zipFile;
 
     public MediaManager() {
         logger.info("Initializing MediaManager");
@@ -27,20 +29,36 @@ public class MediaManager {
     }
 
     /**
-     * Parses the 'media' JSON file from the zip to build the mapping.
-     * The media file format is: {"0": "filename.jpg", "1": "audio.mp3"}
+     * Parses the 'media' JSON file and loads all media content into memory.
      */
-    public void loadMap(ZipFile zipFile) throws IOException {
-        logger.info("Loading media map from zip file");
-        this.zipFile = zipFile;
-        ZipEntry mediaEntry = zipFile.getEntry("media");
-        if (mediaEntry == null) {
-            logger.warn("No 'media' file found in the archive.");
-            return;
-        }
+    public void load(byte[] zipData) throws IOException {
+        logger.info("Loading media map and content from zip data");
 
-        try (InputStream inputStream = zipFile.getInputStream(mediaEntry)) {
-            JsonNode root = objectMapper.readTree(inputStream);
+        try (ZipInputStream zis = new ZipInputStream(new ByteArrayInputStream(zipData))) {
+            ZipEntry entry;
+            byte[] mediaJsonBytes = null;
+
+            while ((entry = zis.getNextEntry()) != null) {
+                String name = entry.getName();
+
+                ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                zis.transferTo(baos);
+                byte[] content = baos.toByteArray();
+
+                if (name.equals("media")) {
+                    mediaJsonBytes = content;
+                } else {
+                    zipEntryBytes.put(name, content);
+                }
+                zis.closeEntry();
+            }
+
+            if (mediaJsonBytes == null) {
+                logger.warn("No 'media' file found in the archive.");
+                return;
+            }
+
+            JsonNode root = objectMapper.readTree(mediaJsonBytes);
             Iterator<Map.Entry<String, JsonNode>> fields = root.fields();
             while (fields.hasNext()) {
                 Map.Entry<String, JsonNode> field = fields.next();
@@ -73,19 +91,21 @@ public class MediaManager {
             return Optional.empty();
         }
 
-        ZipEntry entry = zipFile.getEntry(zipName);
-        if (entry == null) {
-            logger.info("Zip entry '{}' not found for media '{}'", zipName, filename);
+        byte[] content = zipEntryBytes.get(zipName);
+        if (content == null) {
+            logger.info("Zip entry content '{}' not found for media '{}'", zipName, filename);
             return Optional.empty();
         }
 
-        try (InputStream is = zipFile.getInputStream(entry)) {
-            byte[] data = is.readAllBytes();
-            logger.info("Successfully read {} bytes for media '{}'", data.length, filename);
-            return Optional.of(data);
-        } catch (IOException e) {
-            logger.error("Failed to read media file '{}' (zip entry '{}'): {}", filename, zipName, e.getMessage());
-            return Optional.empty();
-        }
+        logger.info("Successfully retrieved {} bytes for media '{}'", content.length, filename);
+        return Optional.of(content);
+    }
+
+    public Map<String, byte[]> getAllMediaEntries() {
+        return Collections.unmodifiableMap(zipEntryBytes);
+    }
+
+    public Map<String, String> getFilenameToZipName() {
+        return Collections.unmodifiableMap(filenameToZipName);
     }
 }
