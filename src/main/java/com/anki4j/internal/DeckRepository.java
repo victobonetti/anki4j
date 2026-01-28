@@ -1,6 +1,5 @@
 package com.anki4j.internal;
 
-import com.anki4j.AnkiCollection;
 import com.anki4j.exception.AnkiException;
 import com.anki4j.model.Deck;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -20,17 +19,11 @@ public class DeckRepository {
 
     private final Connection connection;
     private final ObjectMapper objectMapper;
-    private AnkiCollection context;
 
     public DeckRepository(Connection connection) {
         logger.info("Initializing DeckRepository");
         this.connection = connection;
         this.objectMapper = new ObjectMapper();
-    }
-
-    public void setContext(AnkiCollection context) {
-        logger.info("Setting context for DeckRepository");
-        this.context = context;
     }
 
     public List<Deck> getDecks() {
@@ -45,7 +38,6 @@ public class DeckRepository {
                 try (ResultSet rs = stmt.executeQuery("SELECT id, name FROM decks")) {
                     while (rs.next()) {
                         Deck d = new Deck(rs.getLong("id"), rs.getString("name"));
-                        d.setContext(context);
                         decks.add(d);
                     }
                 }
@@ -64,7 +56,6 @@ public class DeckRepository {
                                 long id = Long.parseLong(field.getKey());
                                 String name = field.getValue().get("name").asText();
                                 Deck d = new Deck(id, name);
-                                d.setContext(context);
                                 decks.add(d);
                             }
                         }
@@ -90,7 +81,6 @@ public class DeckRepository {
                     try (ResultSet rs = pstmt.executeQuery()) {
                         if (rs.next()) {
                             Deck d = new Deck(rs.getLong("id"), rs.getString("name"));
-                            d.setContext(context);
                             logger.info("Deck found: {}", deckId);
                             return Optional.of(d);
                         }
@@ -107,7 +97,6 @@ public class DeckRepository {
                             if (deckNode != null) {
                                 String name = deckNode.get("name").asText();
                                 Deck d = new Deck(deckId, name);
-                                d.setContext(context);
                                 logger.info("Deck found: {}", deckId);
                                 return Optional.of(d);
                             }

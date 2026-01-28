@@ -104,16 +104,9 @@ public final class Anki4j implements AnkiCollection {
             RenderService renderService = new RenderService(noteRepository, modelService);
             AnkiWriter ankiWriter = new AnkiWriter(conn);
 
-            Anki4j instance = new Anki4j(null, conn,
+            return new Anki4j(null, conn,
                     deckRepository, cardRepository, noteRepository,
                     modelService, mediaManager, renderService, ankiWriter);
-
-            // Set context for lazy loading
-            deckRepository.setContext(instance);
-            cardRepository.setContext(instance);
-            noteRepository.setContext(instance);
-
-            return instance;
 
         } catch (Exception e) {
             if (e instanceof AnkiException) {

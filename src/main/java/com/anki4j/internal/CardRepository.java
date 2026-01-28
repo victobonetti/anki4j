@@ -1,6 +1,5 @@
 package com.anki4j.internal;
 
-import com.anki4j.AnkiCollection;
 import com.anki4j.exception.AnkiException;
 import com.anki4j.model.Card;
 
@@ -16,16 +15,10 @@ public class CardRepository {
     private static final Logger logger = LoggerFactory.getLogger(CardRepository.class);
 
     private final Connection connection;
-    private AnkiCollection context;
 
     public CardRepository(Connection connection) {
         logger.info("Initializing CardRepository");
         this.connection = connection;
-    }
-
-    public void setContext(AnkiCollection context) {
-        logger.info("Setting context for CardRepository");
-        this.context = context;
     }
 
     public List<Card> getCards(long deckId) {
@@ -47,7 +40,6 @@ public class CardRepository {
                             rs.getLong("nid"),
                             rs.getLong("did"),
                             rs.getLong("ord"));
-                    c.setContext(context);
                     cards.add(c);
                 }
             }
@@ -71,7 +63,6 @@ public class CardRepository {
                             rs.getLong("nid"),
                             rs.getLong("did"),
                             rs.getLong("ord"));
-                    c.setContext(context);
                     logger.info("Card found: {}", cardId);
                     return Optional.of(c);
                 }

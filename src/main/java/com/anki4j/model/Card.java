@@ -1,6 +1,5 @@
 package com.anki4j.model;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import java.io.Serializable;
 
@@ -52,21 +51,6 @@ public class Card implements Serializable {
 
     public void setOrdinal(long ordinal) {
         this.ordinal = ordinal;
-    }
-
-    private transient com.anki4j.AnkiCollection context;
-
-    @JsonIgnore
-    public void setContext(com.anki4j.AnkiCollection context) {
-        this.context = context;
-    }
-
-    @JsonIgnore
-    public java.util.Optional<Note> getNote() {
-        if (context == null) {
-            throw new IllegalStateException("AnkiCollection context not set on this Card. Cannot lazy load note.");
-        }
-        return context.getNote(this.noteId);
     }
 
     @Override

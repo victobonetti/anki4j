@@ -134,13 +134,13 @@ public class Anki4jTest {
                     .orElse(null);
             assertNotNull(testDeck);
 
-            // Lazy load cards
-            List<Card> cards = testDeck.getCards();
+            // Lazy load cards (now via anki)
+            List<Card> cards = anki.getCards(testDeck.getId());
             assertEquals(1, cards.size());
             Card card = cards.get(0);
 
-            // Verify Note retrieval via Card
-            java.util.Optional<Note> noteOpt = card.getNote();
+            // Verify Note retrieval via anki
+            java.util.Optional<Note> noteOpt = anki.getNote(card.getNoteId());
             assertTrue(noteOpt.isPresent());
             Note note = noteOpt.get();
             assertEquals("Front\u001fBack", note.getFields());
@@ -252,10 +252,10 @@ public class Anki4jTest {
             assertTrue(noteOpt.isPresent());
             Note note = noteOpt.get();
 
-            List<String> mediaRefs = note.getMediaReferences();
-            assertEquals(2, mediaRefs.size());
-            assertTrue(mediaRefs.contains("bird.jpg"));
-            assertTrue(mediaRefs.contains("chirp.mp3"));
+            // getMediaReferences was removed from Note, using manual check or utility here
+            // For now, let's just check if it contains the strings
+            assertTrue(note.getFields().contains("bird.jpg"));
+            assertTrue(note.getFields().contains("chirp.mp3"));
 
             // Check Content Extraction
             Optional<byte[]> imageBytes = anki.getMediaContent("bird.jpg");
@@ -295,16 +295,22 @@ public class Anki4jTest {
         // 2. Edit and Save
         try (AnkiCollection anki = Anki4j.read(originalPathString)) {
             Note note = anki.getNote(10).get();
-            note.getFieldsMap().set("Front", "Updated Front");
-            note.getFieldsMap().set("Back", "Updated Back");
+            // NoteFieldsMap is now used as a utility to parse/unparse fields
+            com.anki4j.model.NoteFieldsMap fieldsMap = new com.anki4j.model.NoteFieldsMap(
+                    anki.getModel(note.getModelId()).get(), note.getFields());
+            fieldsMap.set("Front", "Updated Front");
+            fieldsMap.set("Back", "Updated Back");
+            note.setFields(fieldsMap.toRawString());
             anki.save(note);
         } // Triggers re-zipping
 
         // 3. Verify Persistence by re-opening
         try (AnkiCollection anki = Anki4j.read(originalPathString)) {
             Note note = anki.getNote(10).get();
-            assertEquals("Updated Front", note.getFieldsMap().get("Front"));
-            assertEquals("Updated Back", note.getFieldsMap().get("Back"));
+            com.anki4j.model.NoteFieldsMap fieldsMap = new com.anki4j.model.NoteFieldsMap(
+                    anki.getModel(note.getModelId()).get(), note.getFields());
+            assertEquals("Updated Front", fieldsMap.get("Front"));
+            assertEquals("Updated Back", fieldsMap.get("Back"));
             assertEquals("Updated Front\u001fUpdated Back", note.getFields());
         }
     }
