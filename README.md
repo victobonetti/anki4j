@@ -98,6 +98,40 @@ try (AnkiCollection anki = AnkiCollection.read("my-deck.apkg")) {
 > [!WARNING]
 > The `.apkg` file is only overwritten on `close()` if `anki.save(note)` was called. Changes are initially applied to a temporary database.
 
+## 🏗️ Creating New Collections
+
+You can create a new Anki collection from scratch, populate it, and export it as an `.apkg` file.
+
+```java
+try (AnkiCollection anki = Anki4j.create()) {
+    // 1. Define and add a Model
+    Model model = new Model();
+    model.setId(123456L);
+    model.setName("Basic Model");
+    // ... setup fields and templates ...
+    anki.addModel(model);
+
+    // 2. Add a Deck
+    Deck deck = new Deck(1L, "Default");
+    anki.addDeck(deck);
+
+    // 3. Add a Note (GUID is generated automatically if null)
+    Note note = new Note(10L, null, "Front\u001fBack", model.getId());
+    anki.addNote(note);
+
+    // 4. Add a Card linked to the note and deck
+    Card card = new Card(1000L, 10L, 1L, 0);
+    anki.addCard(card);
+
+    // 5. Add Media
+    anki.addMedia("image.png", bytes);
+
+    // 6. Export to APKG
+    byte[] apkgBytes = anki.export();
+    
+} // Resources cleaned up automatically
+```
+
 ## API Reference
 
 ### AnkiCollection (Interface)
@@ -105,6 +139,7 @@ try (AnkiCollection anki = AnkiCollection.read("my-deck.apkg")) {
 | Method | Returns | Description |
 |--------|---------|-------------|
 | `read(String path)` | `AnkiCollection` | Static factory to open an `.apkg` file |
+| `create()` | `AnkiCollection` | Static factory to create a new empty collection |
 | `getDecks()` | `List<Deck>` | All decks in the collection |
 | `getDeck(long id)` | `Optional<Deck>` | Deck by ID |
 | `getCards(long deckId)` | `List<Card>` | Cards in a deck |
@@ -113,7 +148,13 @@ try (AnkiCollection anki = AnkiCollection.read("my-deck.apkg")) {
 | `getModel(long id)` | `Optional<Model>` | Model by ID |
 | `getMediaContent(String name)` | `Optional<byte[]>` | Media file bytes |
 | `renderCard(Card card)` | `Optional<RenderedCard>` | Rendered card content |
-| `save(Note note)` | `void` | Marks a note for persistence |
+| `save(Note note)` | `void` | Marks an existing note for persistence |
+| `addDeck(Deck deck)` | `void` | Adds a new deck to the collection |
+| `addModel(Model model)` | `void` | Adds a new model to the collection |
+| `addNote(Note note)` | `void` | Adds a new note to the collection |
+| `addCard(Card card)` | `void` | Adds a new card to the collection |
+| `addMedia(String name, byte[] data)`| `void` | Adds a new media file to the collection |
+| `export()` | `byte[]` | Exports the collection as an APKG file |
 
 ### Domain Objects
 
