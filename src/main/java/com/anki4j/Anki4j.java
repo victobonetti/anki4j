@@ -6,6 +6,8 @@ import com.anki4j.model.Card;
 import com.anki4j.model.Deck;
 import com.anki4j.model.Model;
 import com.anki4j.model.Note;
+import com.anki4j.model.Grave;
+import com.anki4j.model.Revlog;
 import com.anki4j.renderer.RenderedCard;
 
 import org.slf4j.Logger;
@@ -36,6 +38,8 @@ public final class Anki4j implements AnkiCollection {
     private final MediaManager mediaManager;
     private final RenderService renderService;
     private final AnkiWriter ankiWriter;
+    private final RevlogRepository revlogRepository;
+    private final GraveRepository graveRepository;
 
     private boolean dirty = false;
 
@@ -43,7 +47,8 @@ public final class Anki4j implements AnkiCollection {
             DeckRepository deckRepository, CardRepository cardRepository,
             NoteRepository noteRepository, ModelService modelService,
             MediaManager mediaManager, RenderService renderService,
-            AnkiWriter ankiWriter) {
+            AnkiWriter ankiWriter, RevlogRepository revlogRepository,
+            GraveRepository graveRepository) {
         logger.info("Initializing Anki4j instance");
         this.originalPath = originalPath;
         this.connection = connection;
@@ -54,6 +59,8 @@ public final class Anki4j implements AnkiCollection {
         this.mediaManager = mediaManager;
         this.renderService = renderService;
         this.ankiWriter = ankiWriter;
+        this.revlogRepository = revlogRepository;
+        this.graveRepository = graveRepository;
     }
 
     public static Anki4j read(String path) {
@@ -64,7 +71,8 @@ public final class Anki4j implements AnkiCollection {
             Anki4j instance = read(data);
             return new Anki4j(apkgPath, instance.connection,
                     instance.deckRepository, instance.cardRepository, instance.noteRepository,
-                    instance.modelService, instance.mediaManager, instance.renderService, instance.ankiWriter);
+                    instance.modelService, instance.mediaManager, instance.renderService,
+                    instance.ankiWriter, instance.revlogRepository, instance.graveRepository);
         } catch (IOException e) {
             throw new AnkiException("Failed to read Anki file from path: " + path, e);
         }
@@ -127,10 +135,13 @@ public final class Anki4j implements AnkiCollection {
         ModelService modelService = new ModelService(conn);
         RenderService renderService = new RenderService(noteRepository, modelService);
         AnkiWriter ankiWriter = new AnkiWriter(conn);
+        RevlogRepository revlogRepository = new RevlogRepository(conn);
+        GraveRepository graveRepository = new GraveRepository(conn);
 
         return new Anki4j(null, conn,
                 deckRepository, cardRepository, noteRepository,
-                modelService, mediaManager, renderService, ankiWriter);
+                modelService, mediaManager, renderService, ankiWriter,
+                revlogRepository, graveRepository);
     }
 
     private static byte[] extractDatabaseBytes(byte[] zipData) throws IOException {
@@ -182,6 +193,11 @@ public final class Anki4j implements AnkiCollection {
     }
 
     @Override
+    public List<Card> getCards() {
+        return cardRepository.getCards();
+    }
+
+    @Override
     public List<Card> getCards(long deckId) {
         logger.debug("Fetching cards for deck ID: {}", deckId);
         return cardRepository.getCards(deckId);
@@ -198,6 +214,11 @@ public final class Anki4j implements AnkiCollection {
     }
 
     @Override
+    public List<Note> getNotes() {
+        return noteRepository.getNotes();
+    }
+
+    @Override
     public Optional<Note> getNoteFromCard(long cardId) {
         return noteRepository.getNoteFromCard(cardId);
     }
@@ -208,6 +229,11 @@ public final class Anki4j implements AnkiCollection {
     }
 
     @Override
+    public List<Model> getModels() {
+        return modelService.getAllModels();
+    }
+
+    @Override
     public Optional<Model> getModel(long modelId) {
         return modelService.getModel(modelId);
     }
@@ -215,6 +241,54 @@ public final class Anki4j implements AnkiCollection {
     @Override
     public Optional<RenderedCard> renderCard(Card card) {
         return renderService.renderCard(card);
+    }
+
+    @Override
+    public List<Revlog> getRevlogs() {
+        return revlogRepository.getAllRevlogs();
+    }
+
+    @Override
+    public Optional<Revlog> getRevlog(long id) {
+        return revlogRepository.getRevlog(id);
+    }
+
+    @Override
+    public List<Grave> getGraves() {
+        return graveRepository.getAllGraves();
+    }
+
+    @Override
+    public Optional<Grave> getGraveByOid(long oid) {
+        return graveRepository.getGraveByOid(oid);
+    }
+
+    @Override
+    public Optional<com.anki4j.model.Col> getCol() {
+        String sql = "SELECT * FROM col LIMIT 1";
+        try (java.sql.PreparedStatement pstmt = connection.prepareStatement(sql);
+                java.sql.ResultSet rs = pstmt.executeQuery()) {
+            if (rs.next()) {
+                com.anki4j.model.Col col = new com.anki4j.model.Col();
+                col.setId(rs.getLong("id"));
+                col.setCrt(rs.getLong("crt"));
+                col.setMod(rs.getLong("mod"));
+                col.setScm(rs.getLong("scm"));
+                col.setVer(rs.getInt("ver"));
+                col.setDty(rs.getInt("dty"));
+                col.setUsn(rs.getInt("usn"));
+                col.setLs(rs.getLong("ls"));
+                col.setConf(rs.getString("conf"));
+                col.setModels(rs.getString("models"));
+                col.setDecks(rs.getString("decks"));
+                col.setDconf(rs.getString("dconf"));
+                col.setTags(rs.getString("tags"));
+                return Optional.of(col);
+            }
+        } catch (java.sql.SQLException e) {
+            logger.error("Failed to query collection settings: {}", e.getMessage());
+        }
+        return Optional.empty();
     }
 
     @Override

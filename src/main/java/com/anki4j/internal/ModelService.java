@@ -64,6 +64,10 @@ public class ModelService {
         }
     }
 
+    public java.util.List<Model> getAllModels() {
+        return new java.util.ArrayList<>(modelCache.values());
+    }
+
     public Optional<Model> getModel(long modelId) {
         logger.info("Fetching model with ID: {}", modelId);
         Model model = modelCache.get(modelId);

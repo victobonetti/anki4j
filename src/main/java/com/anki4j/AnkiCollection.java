@@ -1,9 +1,6 @@
 package com.anki4j;
 
-import com.anki4j.model.Card;
-import com.anki4j.model.Deck;
-import com.anki4j.model.Model;
-import com.anki4j.model.Note;
+import com.anki4j.model.*;
 import com.anki4j.renderer.RenderedCard;
 
 import java.util.List;
@@ -23,25 +20,45 @@ public sealed interface AnkiCollection extends AutoCloseable permits Anki4j {
         return Anki4j.read(data);
     }
 
-    List<Deck> getDecks();
+    // --- Entity Getters ---
 
-    List<Card> getCards(long deckId);
+    List<Deck> getDecks();
 
     Optional<Deck> getDeck(long deckId);
 
+    List<Card> getCards();
+
+    List<Card> getCards(long deckId);
+
     Optional<Card> getCard(long cardId);
+
+    List<Note> getNotes();
 
     Optional<Note> getNote(long noteId);
 
     Optional<Note> getNoteFromCard(long cardId);
 
-    Optional<byte[]> getMediaContent(String filename);
+    List<Model> getModels();
 
     Optional<Model> getModel(long modelId);
 
-    Optional<RenderedCard> renderCard(Card card);
+    List<Revlog> getRevlogs();
+
+    Optional<Revlog> getRevlog(long id);
+
+    List<Grave> getGraves();
+
+    Optional<Grave> getGraveByOid(long oid);
+
+    Optional<Col> getCol();
+
+    // --- Operations ---
 
     void save(Note note);
+
+    Optional<byte[]> getMediaContent(String filename);
+
+    Optional<RenderedCard> renderCard(Card card);
 
     void addDeck(Deck deck);
 

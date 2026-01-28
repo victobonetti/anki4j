@@ -20,6 +20,23 @@ public class NoteRepository {
         this.cardRepository = cardRepository;
     }
 
+    public java.util.List<Note> getNotes() {
+        logger.info("Fetching all notes");
+        java.util.List<Note> notes = new java.util.ArrayList<>();
+        String sql = "SELECT * FROM notes";
+        try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    notes.add(mapResultSetToNote(rs));
+                }
+            }
+        } catch (SQLException e) {
+            logger.error("Failed to query all notes: {}", e.getMessage());
+            throw new AnkiException("Failed to query all notes", e);
+        }
+        return notes;
+    }
+
     public Optional<Note> getNote(long noteId) {
         logger.info("Fetching note with ID: {}", noteId);
         String sql = "SELECT * FROM notes WHERE id = ?";

@@ -21,6 +21,10 @@ public class CardRepository {
         this.connection = connection;
     }
 
+    public List<Card> getCards() {
+        return getCards(-1);
+    }
+
     public List<Card> getCards(long deckId) {
         logger.info("Fetching cards for deck ID: {}", deckId);
         List<Card> cards = new ArrayList<>();
