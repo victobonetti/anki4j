@@ -49,7 +49,7 @@ public class Renderer {
      * Creates a field map from Note content using Model field definitions.
      */
     public Map<String, String> getFieldMap(Note note, Model model) {
-        String[] rawValues = note.getFields().split("\u001F"); // Unit Separator 0x1F
+        String[] rawValues = note.getFlds().split("\u001F"); // Unit Separator 0x1F
         Map<String, String> map = new HashMap<>();
 
         for (int i = 0; i < model.getFlds().size(); i++) {

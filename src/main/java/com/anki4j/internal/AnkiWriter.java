@@ -26,7 +26,7 @@ public class AnkiWriter {
         }
 
         logger.info("Saving changes for note ID: {}", note.getId());
-        String rawFields = note.getFields();
+        String rawFields = note.getFlds();
         long mod = System.currentTimeMillis();
 
         String sql = "UPDATE notes SET flds = ?, mod = ? WHERE id = ?";

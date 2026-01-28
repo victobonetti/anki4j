@@ -83,12 +83,12 @@ public class AnkiCreationTest {
                 // Verify Note
                 Optional<Note> savedNote = reRead.getNote(10L);
                 assertTrue(savedNote.isPresent());
-                assertEquals("Front content\u001fBack content", savedNote.get().getFields());
+                assertEquals("Front content\u001fBack content", savedNote.get().getFlds());
 
                 // Verify Card
                 Optional<Card> savedCard = reRead.getCard(1000L);
                 assertTrue(savedCard.isPresent());
-                assertEquals(100L, savedCard.get().getDeckId());
+                assertEquals(100L, savedCard.get().getDid());
 
                 // Verify Media
                 Optional<byte[]> savedMedia = reRead.getMediaContent("test_image.jpg");

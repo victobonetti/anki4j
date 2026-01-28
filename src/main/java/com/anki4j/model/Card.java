@@ -4,21 +4,34 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import java.io.Serializable;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
-
 public class Card implements Serializable {
     private long id;
-    private long noteId;
-    private long deckId;
-    private long ordinal;
+    private long nid; // note ID
+    private long did; // deck ID
+    private int ord; // ordinal
+    private long mod; // modification time
+    private int usn; // update sequence number
+    private int type;
+    private int queue;
+    private long due;
+    private int ivl; // interval
+    private int factor;
+    private int reps;
+    private int lapses;
+    private int left;
+    private long odue; // original due
+    private long odid; // original deck ID
+    private int flags;
+    private String data;
 
     public Card() {
     }
 
-    public Card(long id, long noteId, long deckId, long ordinal) {
+    public Card(long id, long nid, long did, int ord) {
         this.id = id;
-        this.noteId = noteId;
-        this.deckId = deckId;
-        this.ordinal = ordinal;
+        this.nid = nid;
+        this.did = did;
+        this.ord = ord;
     }
 
     public long getId() {
@@ -29,28 +42,140 @@ public class Card implements Serializable {
         this.id = id;
     }
 
-    public long getNoteId() {
-        return noteId;
+    public long getNid() {
+        return nid;
     }
 
-    public void setNoteId(long noteId) {
-        this.noteId = noteId;
+    public void setNid(long nid) {
+        this.nid = nid;
     }
 
-    public long getDeckId() {
-        return deckId;
+    public long getDid() {
+        return did;
     }
 
-    public void setDeckId(long deckId) {
-        this.deckId = deckId;
+    public void setDid(long did) {
+        this.did = did;
     }
 
-    public long getOrdinal() {
-        return ordinal;
+    public int getOrd() {
+        return ord;
     }
 
-    public void setOrdinal(long ordinal) {
-        this.ordinal = ordinal;
+    public void setOrd(int ord) {
+        this.ord = ord;
+    }
+
+    public long getMod() {
+        return mod;
+    }
+
+    public void setMod(long mod) {
+        this.mod = mod;
+    }
+
+    public int getUsn() {
+        return usn;
+    }
+
+    public void setUsn(int usn) {
+        this.usn = usn;
+    }
+
+    public int getType() {
+        return type;
+    }
+
+    public void setType(int type) {
+        this.type = type;
+    }
+
+    public int getQueue() {
+        return queue;
+    }
+
+    public void setQueue(int queue) {
+        this.queue = queue;
+    }
+
+    public long getDue() {
+        return due;
+    }
+
+    public void setDue(long due) {
+        this.due = due;
+    }
+
+    public int getIvl() {
+        return ivl;
+    }
+
+    public void setIvl(int ivl) {
+        this.ivl = ivl;
+    }
+
+    public int getFactor() {
+        return factor;
+    }
+
+    public void setFactor(int factor) {
+        this.factor = factor;
+    }
+
+    public int getReps() {
+        return reps;
+    }
+
+    public void setReps(int reps) {
+        this.reps = reps;
+    }
+
+    public int getLapses() {
+        return lapses;
+    }
+
+    public void setLapses(int lapses) {
+        this.lapses = lapses;
+    }
+
+    public int getLeft() {
+        return left;
+    }
+
+    public void setLeft(int left) {
+        this.left = left;
+    }
+
+    public long getOdue() {
+        return odue;
+    }
+
+    public void setOdue(long odue) {
+        this.odue = odue;
+    }
+
+    public long getOdid() {
+        return odid;
+    }
+
+    public void setOdid(long odid) {
+        this.odid = odid;
+    }
+
+    public int getFlags() {
+        return flags;
+    }
+
+    public void setFlags(int flags) {
+        this.flags = flags;
+    }
+
+    public String getData() {
+        return data;
+    }
+
+    public void setData(String data) {
+        this.data = data;
     }
 
     @Override

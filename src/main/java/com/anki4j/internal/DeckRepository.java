@@ -27,44 +27,29 @@ public class DeckRepository {
     }
 
     public List<Deck> getDecks() {
-        logger.info("Fetching all decks");
+        logger.info("Fetching all decks from 'col' table");
         List<Deck> decks = new ArrayList<>();
 
         try (Statement stmt = connection.createStatement()) {
-            boolean decksTableExists = tableExists("decks");
-
-            if (decksTableExists) {
-                logger.info("Reading decks from 'decks' table");
-                try (ResultSet rs = stmt.executeQuery("SELECT id, name FROM decks")) {
-                    while (rs.next()) {
-                        Deck d = new Deck(rs.getLong("id"), rs.getString("name"));
-                        decks.add(d);
-                    }
-                }
-            } else {
-                // Fallback: In older Anki versions, decks are in the 'col' table as a JSON
-                // string.
-                logger.info("Reading decks from 'col' table (legacy mode)");
-                try (ResultSet rs = stmt.executeQuery("SELECT decks FROM col LIMIT 1")) {
-                    if (rs.next()) {
-                        String json = rs.getString("decks");
-                        if (json != null && !json.isEmpty()) {
-                            JsonNode root = objectMapper.readTree(json);
-                            Iterator<Map.Entry<String, JsonNode>> fields = root.fields();
-                            while (fields.hasNext()) {
-                                Map.Entry<String, JsonNode> field = fields.next();
-                                long id = Long.parseLong(field.getKey());
-                                String name = field.getValue().get("name").asText();
-                                Deck d = new Deck(id, name);
-                                decks.add(d);
-                            }
+            try (ResultSet rs = stmt.executeQuery("SELECT decks FROM col LIMIT 1")) {
+                if (rs.next()) {
+                    String json = rs.getString("decks");
+                    if (json != null && !json.isEmpty()) {
+                        JsonNode root = objectMapper.readTree(json);
+                        Iterator<Map.Entry<String, JsonNode>> fields = root.fields();
+                        while (fields.hasNext()) {
+                            Map.Entry<String, JsonNode> field = fields.next();
+                            long id = Long.parseLong(field.getKey());
+                            String name = field.getValue().get("name").asText();
+                            Deck d = new Deck(id, name);
+                            decks.add(d);
                         }
                     }
                 }
             }
             logger.info("Found {} decks", decks.size());
         } catch (Exception e) {
-            logger.error("Failed to query decks: {}", e.getMessage());
+            logger.error("Failed to query decks from col: {}", e.getMessage());
             throw new AnkiException("Failed to query decks", e);
         }
         return decks;
@@ -73,33 +58,17 @@ public class DeckRepository {
     public Optional<Deck> getDeck(long deckId) {
         logger.info("Fetching deck with ID: {}", deckId);
         try (Statement stmt = connection.createStatement()) {
-            boolean decksTableExists = tableExists("decks");
-
-            if (decksTableExists) {
-                try (PreparedStatement pstmt = connection.prepareStatement("SELECT id, name FROM decks WHERE id = ?")) {
-                    pstmt.setLong(1, deckId);
-                    try (ResultSet rs = pstmt.executeQuery()) {
-                        if (rs.next()) {
-                            Deck d = new Deck(rs.getLong("id"), rs.getString("name"));
+            try (ResultSet rs = stmt.executeQuery("SELECT decks FROM col LIMIT 1")) {
+                if (rs.next()) {
+                    String json = rs.getString("decks");
+                    if (json != null && !json.isEmpty()) {
+                        JsonNode root = objectMapper.readTree(json);
+                        JsonNode deckNode = root.get(String.valueOf(deckId));
+                        if (deckNode != null) {
+                            String name = deckNode.get("name").asText();
+                            Deck d = new Deck(deckId, name);
                             logger.info("Deck found: {}", deckId);
                             return Optional.of(d);
-                        }
-                    }
-                }
-            } else {
-                // Fallback: Parse 'col' table JSON
-                try (ResultSet rs = stmt.executeQuery("SELECT decks FROM col LIMIT 1")) {
-                    if (rs.next()) {
-                        String json = rs.getString("decks");
-                        if (json != null && !json.isEmpty()) {
-                            JsonNode root = objectMapper.readTree(json);
-                            JsonNode deckNode = root.get(String.valueOf(deckId));
-                            if (deckNode != null) {
-                                String name = deckNode.get("name").asText();
-                                Deck d = new Deck(deckId, name);
-                                logger.info("Deck found: {}", deckId);
-                                return Optional.of(d);
-                            }
                         }
                     }
                 }
@@ -113,21 +82,24 @@ public class DeckRepository {
     }
 
     public void addDeck(Deck deck) {
-        logger.info("Adding deck to database: {}", deck.getName());
-        String sql = "INSERT INTO decks (id, name) VALUES (?, ?)";
-        try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
-            pstmt.setLong(1, deck.getId());
-            pstmt.setString(2, deck.getName());
-            pstmt.executeUpdate();
-        } catch (SQLException e) {
+        logger.info("Adding deck to col JSON: {}", deck.getName());
+        try {
+            Map<Long, Deck> decks = new java.util.HashMap<>();
+            for (Deck d : getDecks()) {
+                decks.put(d.getId(), d);
+            }
+            decks.put(deck.getId(), deck);
+
+            String json = objectMapper.writeValueAsString(decks);
+            String sql = "UPDATE col SET decks = ?";
+            try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
+                pstmt.setString(1, json);
+                pstmt.executeUpdate();
+            }
+        } catch (Exception e) {
             logger.error("Failed to add deck: {}", e.getMessage());
             throw new AnkiException("Failed to add deck", e);
         }
     }
 
-    private boolean tableExists(String tableName) throws SQLException {
-        try (ResultSet rs = connection.getMetaData().getTables(null, null, tableName, null)) {
-            return rs.next();
-        }
-    }
 }

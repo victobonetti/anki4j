@@ -60,21 +60,24 @@ public class Anki4jTest {
         try (Connection conn = DriverManager.getConnection(url);
                 Statement stmt = conn.createStatement()) {
 
-            // Create tables
-            stmt.execute("CREATE TABLE decks (id INTEGER PRIMARY KEY, name TEXT)");
-            stmt.execute("CREATE TABLE col (id INTEGER PRIMARY KEY, decks TEXT, models TEXT)"); // Fallback table
             stmt.execute(
-                    "CREATE TABLE notes (id INTEGER PRIMARY KEY, guid TEXT, mid INTEGER, mod INTEGER, usn INTEGER, tags TEXT, flds TEXT, sfld INTEGER, csum INTEGER, flags INTEGER, data TEXT)");
+                    "CREATE TABLE col (id INTEGER PRIMARY KEY, crt INTEGER, mod INTEGER, scm INTEGER, ver INTEGER, dty INTEGER, usn INTEGER, ls INTEGER, conf TEXT, models TEXT, decks TEXT, dconf TEXT, tags TEXT)");
+            stmt.execute(
+                    "CREATE TABLE notes (id INTEGER PRIMARY KEY, guid TEXT, mid INTEGER, mod INTEGER, usn INTEGER, tags TEXT, flds TEXT, sfld TEXT, csum INTEGER, flags INTEGER, data TEXT)");
             stmt.execute(
                     "CREATE TABLE cards (id INTEGER PRIMARY KEY, nid INTEGER, did INTEGER, ord INTEGER, mod INTEGER, usn INTEGER, type INTEGER, queue INTEGER, due INTEGER, ivl INTEGER, factor INTEGER, reps INTEGER, lapses INTEGER, left INTEGER, odue INTEGER, odid INTEGER, flags INTEGER, data TEXT)");
+            stmt.execute(
+                    "CREATE TABLE revlog (id INTEGER PRIMARY KEY, cid INTEGER, usn INTEGER, ease INTEGER, ivl INTEGER, lastIvl INTEGER, factor INTEGER, time INTEGER, type INTEGER)");
+            stmt.execute("CREATE TABLE graves (usn INTEGER, oid INTEGER, type INTEGER)");
 
             // Insert data
-            stmt.execute("INSERT INTO decks (id, name) VALUES (1, 'Default')");
-            stmt.execute("INSERT INTO decks (id, name) VALUES (100, 'Test Deck')");
+            String decksJson = "{\"1\": {\"name\": \"Default\", \"id\": 1}, \"100\": {\"name\": \"Test Deck\", \"id\": 100}}";
 
             // Model with 2 fields: Front, Back
             String modelsJson = "{\"1\": {\"id\": 1, \"name\": \"Basic\", \"flds\": [{\"name\": \"Front\", \"ord\": 0}, {\"name\": \"Back\", \"ord\": 1}], \"tmpls\": [{\"name\": \"Card 1\", \"qfmt\": \"{{Front}}\", \"afmt\": \"{{FrontSide}}<hr id=answer>{{Back}}\"}]}}";
-            stmt.execute("INSERT INTO col (models) VALUES ('" + modelsJson + "')");
+            stmt.execute(
+                    "INSERT INTO col (id, decks, models, crt, mod, scm, ver, dty, usn, ls, conf, dconf, tags) VALUES (1, '"
+                            + decksJson + "', '" + modelsJson + "', 0, 0, 0, 11, 0, 0, 0, '{}', '{}', '{}')");
 
             stmt.execute("INSERT INTO notes (id, guid, flds, mid) VALUES (10, 'guid1', 'Front\u001fBack', 1)");
             stmt.execute("INSERT INTO cards (id, nid, did, ord) VALUES (1000, 10, 100, 0)");
@@ -140,10 +143,10 @@ public class Anki4jTest {
             Card card = cards.get(0);
 
             // Verify Note retrieval via anki
-            java.util.Optional<Note> noteOpt = anki.getNote(card.getNoteId());
+            java.util.Optional<Note> noteOpt = anki.getNote(card.getNid());
             assertTrue(noteOpt.isPresent());
             Note note = noteOpt.get();
-            assertEquals("Front\u001fBack", note.getFields());
+            assertEquals("Front\u001fBack", note.getFlds());
 
         } catch (Exception e) {
             e.printStackTrace();
@@ -162,8 +165,8 @@ public class Anki4jTest {
             // Test getCard
             java.util.Optional<Card> card = anki.getCard(1000);
             assertTrue(card.isPresent());
-            assertEquals(100, card.get().getDeckId());
-            assertEquals(10, card.get().getNoteId());
+            assertEquals(100, card.get().getDid());
+            assertEquals(10, card.get().getNid());
 
             // Test getNoteFromCard
             java.util.Optional<Note> note = anki.getNoteFromCard(1000);
@@ -254,8 +257,8 @@ public class Anki4jTest {
 
             // getMediaReferences was removed from Note, using manual check or utility here
             // For now, let's just check if it contains the strings
-            assertTrue(note.getFields().contains("bird.jpg"));
-            assertTrue(note.getFields().contains("chirp.mp3"));
+            assertTrue(note.getFlds().contains("bird.jpg"));
+            assertTrue(note.getFlds().contains("chirp.mp3"));
 
             // Check Content Extraction
             Optional<byte[]> imageBytes = anki.getMediaContent("bird.jpg");
@@ -297,10 +300,10 @@ public class Anki4jTest {
             Note note = anki.getNote(10).get();
             // NoteFieldsMap is now used as a utility to parse/unparse fields
             com.anki4j.model.NoteFieldsMap fieldsMap = new com.anki4j.model.NoteFieldsMap(
-                    anki.getModel(note.getModelId()).get(), note.getFields());
+                    anki.getModel(note.getMid()).get(), note.getFlds());
             fieldsMap.set("Front", "Updated Front");
             fieldsMap.set("Back", "Updated Back");
-            note.setFields(fieldsMap.toRawString());
+            note.setFlds(fieldsMap.toRawString());
             anki.save(note);
         } // Triggers re-zipping
 
@@ -308,10 +311,10 @@ public class Anki4jTest {
         try (AnkiCollection anki = Anki4j.read(originalPathString)) {
             Note note = anki.getNote(10).get();
             com.anki4j.model.NoteFieldsMap fieldsMap = new com.anki4j.model.NoteFieldsMap(
-                    anki.getModel(note.getModelId()).get(), note.getFields());
+                    anki.getModel(note.getMid()).get(), note.getFlds());
             assertEquals("Updated Front", fieldsMap.get("Front"));
             assertEquals("Updated Back", fieldsMap.get("Back"));
-            assertEquals("Updated Front\u001fUpdated Back", note.getFields());
+            assertEquals("Updated Front\u001fUpdated Back", note.getFlds());
         }
     }
 

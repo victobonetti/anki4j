@@ -24,7 +24,7 @@ public class CardRepository {
     public List<Card> getCards(long deckId) {
         logger.info("Fetching cards for deck ID: {}", deckId);
         List<Card> cards = new ArrayList<>();
-        String sql = "SELECT id, nid, did, ord FROM cards";
+        String sql = "SELECT * FROM cards";
         if (deckId != -1) {
             sql += " WHERE did = ?";
         }
@@ -35,11 +35,7 @@ public class CardRepository {
             }
             try (ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
-                    Card c = new Card(
-                            rs.getLong("id"),
-                            rs.getLong("nid"),
-                            rs.getLong("did"),
-                            rs.getLong("ord"));
+                    Card c = mapResultSetToCard(rs);
                     cards.add(c);
                 }
             }
@@ -53,16 +49,12 @@ public class CardRepository {
 
     public Optional<Card> getCard(long cardId) {
         logger.info("Fetching card with ID: {}", cardId);
-        String sql = "SELECT id, nid, did, ord FROM cards WHERE id = ?";
+        String sql = "SELECT * FROM cards WHERE id = ?";
         try (PreparedStatement stmt = connection.prepareStatement(sql)) {
             stmt.setLong(1, cardId);
             try (ResultSet rs = stmt.executeQuery()) {
                 if (rs.next()) {
-                    Card c = new Card(
-                            rs.getLong("id"),
-                            rs.getLong("nid"),
-                            rs.getLong("did"),
-                            rs.getLong("ord"));
+                    Card c = mapResultSetToCard(rs);
                     logger.info("Card found: {}", cardId);
                     return Optional.of(c);
                 }
@@ -75,28 +67,51 @@ public class CardRepository {
         return Optional.empty();
     }
 
+    private Card mapResultSetToCard(ResultSet rs) throws SQLException {
+        Card c = new Card();
+        c.setId(rs.getLong("id"));
+        c.setNid(rs.getLong("nid"));
+        c.setDid(rs.getLong("did"));
+        c.setOrd(rs.getInt("ord"));
+        c.setMod(rs.getLong("mod"));
+        c.setUsn(rs.getInt("usn"));
+        c.setType(rs.getInt("type"));
+        c.setQueue(rs.getInt("queue"));
+        c.setDue(rs.getLong("due"));
+        c.setIvl(rs.getInt("ivl"));
+        c.setFactor(rs.getInt("factor"));
+        c.setReps(rs.getInt("reps"));
+        c.setLapses(rs.getInt("lapses"));
+        c.setLeft(rs.getInt("left"));
+        c.setOdue(rs.getLong("odue"));
+        c.setOdid(rs.getLong("odid"));
+        c.setFlags(rs.getInt("flags"));
+        c.setData(rs.getString("data"));
+        return c;
+    }
+
     public void addCard(Card card) {
         logger.info("Adding card to database: {}", card.getId());
         String sql = "INSERT INTO cards (id, nid, did, ord, mod, usn, type, queue, due, ivl, factor, reps, lapses, left, odue, odid, flags, data) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
             pstmt.setLong(1, card.getId());
-            pstmt.setLong(2, card.getNoteId());
-            pstmt.setLong(3, card.getDeckId());
-            pstmt.setLong(4, card.getOrdinal());
-            pstmt.setLong(5, System.currentTimeMillis() / 1000); // mod
-            pstmt.setInt(6, -1); // usn
-            pstmt.setInt(7, 0); // type
-            pstmt.setInt(8, 0); // queue
-            pstmt.setLong(9, 0); // due
-            pstmt.setInt(10, 0); // ivl
-            pstmt.setInt(11, 0); // factor
-            pstmt.setInt(12, 0); // reps
-            pstmt.setInt(13, 0); // lapses
-            pstmt.setInt(14, 0); // left
-            pstmt.setLong(15, 0); // odue
-            pstmt.setLong(16, 0); // odid
-            pstmt.setInt(17, 0); // flags
-            pstmt.setString(18, ""); // data
+            pstmt.setLong(2, card.getNid());
+            pstmt.setLong(3, card.getDid());
+            pstmt.setInt(4, card.getOrd());
+            pstmt.setLong(5, card.getMod() == 0 ? System.currentTimeMillis() / 1000 : card.getMod());
+            pstmt.setInt(6, card.getUsn());
+            pstmt.setInt(7, card.getType());
+            pstmt.setInt(8, card.getQueue());
+            pstmt.setLong(9, card.getDue());
+            pstmt.setInt(10, card.getIvl());
+            pstmt.setInt(11, card.getFactor());
+            pstmt.setInt(12, card.getReps());
+            pstmt.setInt(13, card.getLapses());
+            pstmt.setInt(14, card.getLeft());
+            pstmt.setLong(15, card.getOdue());
+            pstmt.setLong(16, card.getOdid());
+            pstmt.setInt(17, card.getFlags());
+            pstmt.setString(18, card.getData() == null ? "" : card.getData());
             pstmt.executeUpdate();
         } catch (SQLException e) {
             logger.error("Failed to add card: {}", e.getMessage());
