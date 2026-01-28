@@ -50,4 +50,25 @@ public class NoteRepository {
                 .flatMap(card -> getNote(card.getNoteId()));
     }
 
+    public void addNote(Note note) {
+        logger.info("Adding note to database: {}", note.getId());
+        String sql = "INSERT INTO notes (id, guid, mid, mod, usn, tags, flds, sfld, csum, flags, data) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
+            pstmt.setLong(1, note.getId());
+            pstmt.setString(2, note.getGuid());
+            pstmt.setLong(3, note.getModelId());
+            pstmt.setLong(4, System.currentTimeMillis() / 1000); // mod
+            pstmt.setInt(5, -1); // usn
+            pstmt.setString(6, ""); // tags
+            pstmt.setString(7, note.getFields());
+            pstmt.setLong(8, 0); // sfld
+            pstmt.setLong(9, 0); // csum
+            pstmt.setInt(10, 0); // flags
+            pstmt.setString(11, ""); // data
+            pstmt.executeUpdate();
+        } catch (SQLException e) {
+            logger.error("Failed to add note: {}", e.getMessage());
+            throw new AnkiException("Failed to add note", e);
+        }
+    }
 }

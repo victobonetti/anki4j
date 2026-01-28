@@ -74,4 +74,33 @@ public class CardRepository {
         }
         return Optional.empty();
     }
+
+    public void addCard(Card card) {
+        logger.info("Adding card to database: {}", card.getId());
+        String sql = "INSERT INTO cards (id, nid, did, ord, mod, usn, type, queue, due, ivl, factor, reps, lapses, left, odue, odid, flags, data) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
+            pstmt.setLong(1, card.getId());
+            pstmt.setLong(2, card.getNoteId());
+            pstmt.setLong(3, card.getDeckId());
+            pstmt.setLong(4, card.getOrdinal());
+            pstmt.setLong(5, System.currentTimeMillis() / 1000); // mod
+            pstmt.setInt(6, -1); // usn
+            pstmt.setInt(7, 0); // type
+            pstmt.setInt(8, 0); // queue
+            pstmt.setLong(9, 0); // due
+            pstmt.setInt(10, 0); // ivl
+            pstmt.setInt(11, 0); // factor
+            pstmt.setInt(12, 0); // reps
+            pstmt.setInt(13, 0); // lapses
+            pstmt.setInt(14, 0); // left
+            pstmt.setLong(15, 0); // odue
+            pstmt.setLong(16, 0); // odid
+            pstmt.setInt(17, 0); // flags
+            pstmt.setString(18, ""); // data
+            pstmt.executeUpdate();
+        } catch (SQLException e) {
+            logger.error("Failed to add card: {}", e.getMessage());
+            throw new AnkiException("Failed to add card", e);
+        }
+    }
 }

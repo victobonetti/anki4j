@@ -112,6 +112,19 @@ public class DeckRepository {
         return Optional.empty();
     }
 
+    public void addDeck(Deck deck) {
+        logger.info("Adding deck to database: {}", deck.getName());
+        String sql = "INSERT INTO decks (id, name) VALUES (?, ?)";
+        try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
+            pstmt.setLong(1, deck.getId());
+            pstmt.setString(2, deck.getName());
+            pstmt.executeUpdate();
+        } catch (SQLException e) {
+            logger.error("Failed to add deck: {}", e.getMessage());
+            throw new AnkiException("Failed to add deck", e);
+        }
+    }
+
     private boolean tableExists(String tableName) throws SQLException {
         try (ResultSet rs = connection.getMetaData().getTables(null, null, tableName, null)) {
             return rs.next();

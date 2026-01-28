@@ -92,21 +92,7 @@ public final class Anki4j implements AnkiCollection {
             java.sql.Connection conn = java.sql.DriverManager.getConnection("jdbc:sqlite::memory:");
             loadDatabaseIntoMemory(conn, dbBytes);
 
-            // 3. Initialize services
-            logger.info("Initializing services...");
-            MediaManager mediaManager = new MediaManager();
-            mediaManager.load(data);
-
-            CardRepository cardRepository = new CardRepository(conn);
-            NoteRepository noteRepository = new NoteRepository(conn, cardRepository);
-            DeckRepository deckRepository = new DeckRepository(conn);
-            ModelService modelService = new ModelService(conn);
-            RenderService renderService = new RenderService(noteRepository, modelService);
-            AnkiWriter ankiWriter = new AnkiWriter(conn);
-
-            return new Anki4j(null, conn,
-                    deckRepository, cardRepository, noteRepository,
-                    modelService, mediaManager, renderService, ankiWriter);
+            return initializeFromConnection(conn, data);
 
         } catch (Exception e) {
             if (e instanceof AnkiException) {
@@ -114,6 +100,37 @@ public final class Anki4j implements AnkiCollection {
             }
             throw new AnkiException("Failed to initialize Anki4j from bytes", e);
         }
+    }
+
+    public static Anki4j create() {
+        logger.info("Creating new empty Anki collection");
+        try {
+            java.sql.Connection conn = java.sql.DriverManager.getConnection("jdbc:sqlite::memory:");
+            initializeSchema(conn);
+
+            return initializeFromConnection(conn, null);
+        } catch (Exception e) {
+            throw new AnkiException("Failed to create new Anki collection", e);
+        }
+    }
+
+    private static Anki4j initializeFromConnection(java.sql.Connection conn, byte[] data) throws IOException {
+        logger.info("Initializing services from connection");
+        MediaManager mediaManager = new MediaManager();
+        if (data != null) {
+            mediaManager.load(data);
+        }
+
+        CardRepository cardRepository = new CardRepository(conn);
+        NoteRepository noteRepository = new NoteRepository(conn, cardRepository);
+        DeckRepository deckRepository = new DeckRepository(conn);
+        ModelService modelService = new ModelService(conn);
+        RenderService renderService = new RenderService(noteRepository, modelService);
+        AnkiWriter ankiWriter = new AnkiWriter(conn);
+
+        return new Anki4j(null, conn,
+                deckRepository, cardRepository, noteRepository,
+                modelService, mediaManager, renderService, ankiWriter);
     }
 
     private static byte[] extractDatabaseBytes(byte[] zipData) throws IOException {
@@ -207,6 +224,41 @@ public final class Anki4j implements AnkiCollection {
         this.dirty = true;
     }
 
+    @Override
+    public void addDeck(Deck deck) {
+        logger.info("Adding deck: {}", deck.getName());
+        deckRepository.addDeck(deck);
+        this.dirty = true;
+    }
+
+    @Override
+    public void addModel(Model model) {
+        logger.info("Adding model: {}", model.getName());
+        modelService.addModel(model);
+        this.dirty = true;
+    }
+
+    @Override
+    public void addNote(Note note) {
+        logger.info("Adding note: {}", note.getId());
+        noteRepository.addNote(note);
+        this.dirty = true;
+    }
+
+    @Override
+    public void addCard(Card card) {
+        logger.info("Adding card: {}", card.getId());
+        cardRepository.addCard(card);
+        this.dirty = true;
+    }
+
+    @Override
+    public void addMedia(String filename, byte[] content) {
+        logger.info("Adding media: {}", filename);
+        mediaManager.addMedia(filename, content);
+        this.dirty = true;
+    }
+
     // ==================== Resource Management ====================
 
     @Override
@@ -271,6 +323,21 @@ public final class Anki4j implements AnkiCollection {
             throw new AnkiException("Failed to export APKG", e);
         }
         return baos.toByteArray();
+    }
+
+    private static void initializeSchema(java.sql.Connection conn) throws java.sql.SQLException {
+        logger.info("Initializing new Anki database schema");
+        try (java.sql.Statement stmt = conn.createStatement()) {
+            stmt.execute("CREATE TABLE decks (id INTEGER PRIMARY KEY, name TEXT)");
+            stmt.execute("CREATE TABLE col (id INTEGER PRIMARY KEY, decks TEXT, models TEXT)");
+            stmt.execute(
+                    "CREATE TABLE notes (id INTEGER PRIMARY KEY, guid TEXT, mid INTEGER, mod INTEGER, usn INTEGER, tags TEXT, flds TEXT, sfld INTEGER, csum INTEGER, flags INTEGER, data TEXT)");
+            stmt.execute(
+                    "CREATE TABLE cards (id INTEGER PRIMARY KEY, nid INTEGER, did INTEGER, ord INTEGER, mod INTEGER, usn INTEGER, type INTEGER, queue INTEGER, due INTEGER, ivl INTEGER, factor INTEGER, reps INTEGER, lapses INTEGER, left INTEGER, odue INTEGER, odid INTEGER, flags INTEGER, data TEXT)");
+
+            // Initialize 'col' table with default structure if needed, or leave for later
+            stmt.execute("INSERT INTO col (id, decks, models) VALUES (1, '{}', '{}')");
+        }
     }
 
     private byte[] backUpMemoryDatabase() {

@@ -108,4 +108,22 @@ public class MediaManager {
     public Map<String, String> getFilenameToZipName() {
         return Collections.unmodifiableMap(filenameToZipName);
     }
+
+    public void addMedia(String filename, byte[] content) {
+        logger.info("Adding new media: {}", filename);
+        // Find a unique zip name (e.g., using next available integer)
+        int maxZipName = -1;
+        for (String zipName : filenameToZipName.values()) {
+            try {
+                int val = Integer.parseInt(zipName);
+                if (val > maxZipName) {
+                    maxZipName = val;
+                }
+            } catch (NumberFormatException ignored) {
+            }
+        }
+        String nextZipName = String.valueOf(maxZipName + 1);
+        filenameToZipName.put(filename, nextZipName);
+        zipEntryBytes.put(nextZipName, content);
+    }
 }

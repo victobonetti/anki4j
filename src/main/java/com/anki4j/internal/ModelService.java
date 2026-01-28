@@ -22,9 +22,11 @@ public class ModelService {
 
     private final Map<Long, Model> modelCache = new HashMap<>();
     private final ObjectMapper objectMapper;
+    private final Connection connection;
 
     public ModelService(Connection connection) {
         logger.info("Initializing ModelService");
+        this.connection = connection;
         this.objectMapper = new ObjectMapper();
         loadModels(connection);
     }
@@ -71,5 +73,25 @@ public class ModelService {
             logger.info("Model not found in cache: {}", modelId);
         }
         return Optional.ofNullable(model);
+    }
+
+    public void addModel(Model model) {
+        logger.info("Adding model: {}", model.getName());
+        modelCache.put(model.getId(), model);
+        saveModelsToDatabase();
+    }
+
+    private void saveModelsToDatabase() {
+        try {
+            String json = objectMapper.writeValueAsString(modelCache);
+            String sql = "UPDATE col SET models = ?";
+            try (java.sql.PreparedStatement pstmt = connection.prepareStatement(sql)) {
+                pstmt.setString(1, json);
+                pstmt.executeUpdate();
+            }
+        } catch (Exception e) {
+            logger.error("Failed to save models to database: {}", e.getMessage());
+            throw new AnkiException("Failed to save models to database", e);
+        }
     }
 }

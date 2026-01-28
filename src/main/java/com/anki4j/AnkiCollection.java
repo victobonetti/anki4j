@@ -43,6 +43,16 @@ public sealed interface AnkiCollection extends AutoCloseable permits Anki4j {
 
     void save(Note note);
 
+    void addDeck(Deck deck);
+
+    void addModel(Model model);
+
+    void addNote(Note note);
+
+    void addCard(Card card);
+
+    void addMedia(String filename, byte[] content);
+
     byte[] export();
 
     void close();
