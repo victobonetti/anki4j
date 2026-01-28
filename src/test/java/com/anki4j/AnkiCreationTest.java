@@ -48,8 +48,11 @@ public class AnkiCreationTest {
             Deck customDeck = new Deck(100L, "Custom Deck");
             anki.addDeck(customDeck);
 
-            // 3. Add Note
-            Note note = new Note(10L, "guid123", "Front content" + (char) 31 + "Back content", 123456L);
+            // 3. Add Note (testing GUID auto-generation by passing null)
+            Note note = new Note(10L, null, "Front content" + (char) 31 + "Back content", 123456L);
+            String generatedGuid = note.getGuid();
+            assertNotNull(generatedGuid);
+            assertEquals(10, generatedGuid.length());
             anki.addNote(note);
 
             // 4. Add Card

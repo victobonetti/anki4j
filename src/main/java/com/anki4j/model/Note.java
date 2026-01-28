@@ -16,7 +16,7 @@ public class Note implements Serializable {
 
     public Note(long id, String guid, String fields, long modelId) {
         this.id = id;
-        this.guid = guid;
+        this.guid = (guid == null || guid.isEmpty()) ? com.anki4j.internal.GuidGenerator.generate() : guid;
         this.fields = fields;
         this.modelId = modelId;
     }
