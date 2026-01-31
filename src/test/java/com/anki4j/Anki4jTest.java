@@ -345,4 +345,32 @@ public class Anki4jTest {
             assertTrue(card.isPresent());
         }
     }
+
+    @Test(expected = com.anki4j.exception.AnkiException.class)
+    public void testLoadExceedingSizeLimit() {
+        // Create dummy data > 1000 KB (default limit)
+        // 1000 KB = 1000 * 1024 bytes = 1,024,000 bytes
+        // Let's create 1.1 MB
+        byte[] largeData = new byte[1100 * 1024];
+        Anki4j.read(largeData);
+    }
+
+    @Test(expected = com.anki4j.exception.AnkiException.class)
+    public void testLoadInvalidFormat() {
+        // Random bytes, not a zip
+        byte[] invalidData = new byte[] { 0x01, 0x02, 0x03, 0x04 };
+        Anki4j.read(invalidData);
+    }
+
+    @Test(expected = com.anki4j.exception.AnkiException.class)
+    public void testLoadValidZipMissingDb() throws IOException {
+        // Create a valid zip but without collection.anki2
+        java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
+        try (ZipOutputStream zos = new ZipOutputStream(baos)) {
+            zos.putNextEntry(new ZipEntry("dummy.txt"));
+            zos.write("Content".getBytes());
+            zos.closeEntry();
+        }
+        Anki4j.read(baos.toByteArray());
+    }
 }

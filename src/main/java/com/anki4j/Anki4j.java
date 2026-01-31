@@ -19,7 +19,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.zip.ZipEntry;
-import java.util.zip.ZipInputStream;
 import java.util.zip.ZipOutputStream;
 
 public final class Anki4j implements AnkiCollection {
@@ -40,6 +39,7 @@ public final class Anki4j implements AnkiCollection {
     private final AnkiWriter ankiWriter;
     private final RevlogRepository revlogRepository;
     private final GraveRepository graveRepository;
+    private final ColRepository colRepository;
 
     private boolean dirty = false;
 
@@ -48,7 +48,7 @@ public final class Anki4j implements AnkiCollection {
             NoteRepository noteRepository, ModelService modelService,
             MediaManager mediaManager, RenderService renderService,
             AnkiWriter ankiWriter, RevlogRepository revlogRepository,
-            GraveRepository graveRepository) {
+            GraveRepository graveRepository, ColRepository colRepository) {
         logger.info("Initializing Anki4j instance");
         this.originalPath = originalPath;
         this.connection = connection;
@@ -61,6 +61,7 @@ public final class Anki4j implements AnkiCollection {
         this.ankiWriter = ankiWriter;
         this.revlogRepository = revlogRepository;
         this.graveRepository = graveRepository;
+        this.colRepository = colRepository;
     }
 
     public static Anki4j read(String path) {
@@ -72,7 +73,8 @@ public final class Anki4j implements AnkiCollection {
             return new Anki4j(apkgPath, instance.connection,
                     instance.deckRepository, instance.cardRepository, instance.noteRepository,
                     instance.modelService, instance.mediaManager, instance.renderService,
-                    instance.ankiWriter, instance.revlogRepository, instance.graveRepository);
+                    instance.ankiWriter, instance.revlogRepository, instance.graveRepository,
+                    instance.colRepository);
         } catch (IOException e) {
             throw new AnkiException("Failed to read Anki file from path: " + path, e);
         }
@@ -86,19 +88,41 @@ public final class Anki4j implements AnkiCollection {
         }
     }
 
+    private static final long MAX_PKG_SIZE_BYTES;
+
+    static {
+        long limitKb = 1000; // Default 1000 KB
+        try {
+            String env = System.getenv("ANKI4J_MAX_PKG_SIZE_KB");
+            if (env != null) {
+                limitKb = Long.parseLong(env);
+            }
+        } catch (NumberFormatException e) {
+            logger.warn("Invalid format for ANKI4J_MAX_PKG_SIZE_KB, using default: {}", limitKb);
+        }
+        MAX_PKG_SIZE_BYTES = limitKb * 1024;
+    }
+
+    // ... (existing helper methods)
+
     public static Anki4j read(byte[] data) {
         logger.info("Opening Anki collection from bytes (length: {})", data.length);
 
+        if (data.length > MAX_PKG_SIZE_BYTES) {
+            throw new AnkiException(
+                    "File size exceeds maximum allowed limit of " + (MAX_PKG_SIZE_BYTES / 1024) + " KB");
+        }
+
         try {
             // 1. Extract database from bytes
-            byte[] dbBytes = extractDatabaseBytes(data);
+            byte[] dbBytes = DatabaseManager.extractDatabaseBytes(data);
             if (dbBytes == null) {
-                throw new AnkiException("Could not find collection.anki2 or collection.anki21 in the archive");
+                throw new AnkiException("Invalid Anki package: collection.anki2 or collection.anki21 not found");
             }
 
             // 2. Connect to in-memory SQLite and load data
             java.sql.Connection conn = java.sql.DriverManager.getConnection("jdbc:sqlite::memory:");
-            loadDatabaseIntoMemory(conn, dbBytes);
+            DatabaseManager.restore(conn, dbBytes);
 
             return initializeFromConnection(conn, data);
 
@@ -114,7 +138,7 @@ public final class Anki4j implements AnkiCollection {
         logger.info("Creating new empty Anki collection");
         try {
             java.sql.Connection conn = java.sql.DriverManager.getConnection("jdbc:sqlite::memory:");
-            initializeSchema(conn);
+            DatabaseManager.initializeSchema(conn);
 
             return initializeFromConnection(conn, null);
         } catch (Exception e) {
@@ -137,47 +161,12 @@ public final class Anki4j implements AnkiCollection {
         AnkiWriter ankiWriter = new AnkiWriter(conn);
         RevlogRepository revlogRepository = new RevlogRepository(conn);
         GraveRepository graveRepository = new GraveRepository(conn);
+        ColRepository colRepository = new ColRepository(conn);
 
         return new Anki4j(null, conn,
                 deckRepository, cardRepository, noteRepository,
                 modelService, mediaManager, renderService, ankiWriter,
-                revlogRepository, graveRepository);
-    }
-
-    private static byte[] extractDatabaseBytes(byte[] zipData) throws IOException {
-        try (ZipInputStream zis = new ZipInputStream(new java.io.ByteArrayInputStream(zipData))) {
-            ZipEntry entry;
-            byte[] result21 = null;
-            byte[] result20 = null;
-
-            while ((entry = zis.getNextEntry()) != null) {
-                if (entry.getName().equals("collection.anki21")) {
-                    ByteArrayOutputStream baos = new ByteArrayOutputStream();
-                    zis.transferTo(baos);
-                    result21 = baos.toByteArray();
-                    break;
-                } else if (entry.getName().equals("collection.anki2")) {
-                    ByteArrayOutputStream baos = new ByteArrayOutputStream();
-                    zis.transferTo(baos);
-                    result20 = baos.toByteArray();
-                }
-                zis.closeEntry();
-            }
-            return result21 != null ? result21 : result20;
-        }
-    }
-
-    private static void loadDatabaseIntoMemory(java.sql.Connection conn, byte[] dbBytes) throws Exception {
-        logger.info("Loading database bytes into in-memory SQLite");
-        java.nio.file.Path tempFile = java.nio.file.Files.createTempFile("anki4j_db", ".db");
-        try {
-            java.nio.file.Files.write(tempFile, dbBytes);
-            try (java.sql.Statement stmt = conn.createStatement()) {
-                stmt.executeUpdate("restore from " + tempFile.toAbsolutePath());
-            }
-        } finally {
-            java.nio.file.Files.deleteIfExists(tempFile);
-        }
+                revlogRepository, graveRepository, colRepository);
     }
 
     // ==================== Delegated Methods ====================
@@ -265,30 +254,7 @@ public final class Anki4j implements AnkiCollection {
 
     @Override
     public Optional<com.anki4j.model.Col> getCol() {
-        String sql = "SELECT * FROM col LIMIT 1";
-        try (java.sql.PreparedStatement pstmt = connection.prepareStatement(sql);
-                java.sql.ResultSet rs = pstmt.executeQuery()) {
-            if (rs.next()) {
-                com.anki4j.model.Col col = new com.anki4j.model.Col();
-                col.setId(rs.getLong("id"));
-                col.setCrt(rs.getLong("crt"));
-                col.setMod(rs.getLong("mod"));
-                col.setScm(rs.getLong("scm"));
-                col.setVer(rs.getInt("ver"));
-                col.setDty(rs.getInt("dty"));
-                col.setUsn(rs.getInt("usn"));
-                col.setLs(rs.getLong("ls"));
-                col.setConf(rs.getString("conf"));
-                col.setModels(rs.getString("models"));
-                col.setDecks(rs.getString("decks"));
-                col.setDconf(rs.getString("dconf"));
-                col.setTags(rs.getString("tags"));
-                return Optional.of(col);
-            }
-        } catch (java.sql.SQLException e) {
-            logger.error("Failed to query collection settings: {}", e.getMessage());
-        }
-        return Optional.empty();
+        return colRepository.getCol();
     }
 
     @Override
@@ -366,7 +332,7 @@ public final class Anki4j implements AnkiCollection {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         try (ZipOutputStream zos = new ZipOutputStream(baos)) {
             // 1. Save database to a temporary file and add to zip
-            byte[] dbBytes = backUpMemoryDatabase();
+            byte[] dbBytes = DatabaseManager.backup(connection);
             zos.putNextEntry(new ZipEntry("collection.anki21"));
             zos.write(dbBytes);
             zos.closeEntry();
@@ -397,46 +363,5 @@ public final class Anki4j implements AnkiCollection {
             throw new AnkiException("Failed to export APKG", e);
         }
         return baos.toByteArray();
-    }
-
-    private static void initializeSchema(java.sql.Connection conn) throws java.sql.SQLException {
-        logger.info("Initializing new Anki database schema");
-        try (java.sql.Statement stmt = conn.createStatement()) {
-            stmt.execute(
-                    "CREATE TABLE IF NOT EXISTS col (id INTEGER PRIMARY KEY, crt INTEGER NOT NULL, mod INTEGER NOT NULL, scm INTEGER NOT NULL, ver INTEGER NOT NULL, dty INTEGER NOT NULL, usn INTEGER NOT NULL, ls INTEGER NOT NULL, conf TEXT NOT NULL, models TEXT NOT NULL, decks TEXT NOT NULL, dconf TEXT NOT NULL, tags TEXT NOT NULL)");
-            stmt.execute(
-                    "CREATE TABLE IF NOT EXISTS notes (id INTEGER PRIMARY KEY, guid TEXT NOT NULL, mid INTEGER NOT NULL, mod INTEGER NOT NULL, usn INTEGER NOT NULL, tags TEXT NOT NULL, flds TEXT NOT NULL, sfld TEXT NOT NULL, csum INTEGER NOT NULL, flags INTEGER NOT NULL, data TEXT NOT NULL)");
-            stmt.execute(
-                    "CREATE TABLE IF NOT EXISTS cards (id INTEGER PRIMARY KEY, nid INTEGER NOT NULL, did INTEGER NOT NULL, ord INTEGER NOT NULL, mod INTEGER NOT NULL, usn INTEGER NOT NULL, type INTEGER NOT NULL, queue INTEGER NOT NULL, due INTEGER NOT NULL, ivl INTEGER NOT NULL, factor INTEGER NOT NULL, reps INTEGER NOT NULL, lapses INTEGER NOT NULL, left INTEGER NOT NULL, odue INTEGER NOT NULL, odid INTEGER NOT NULL, flags INTEGER NOT NULL, data TEXT NOT NULL)");
-            stmt.execute(
-                    "CREATE TABLE IF NOT EXISTS revlog (id INTEGER PRIMARY KEY, cid INTEGER NOT NULL, usn INTEGER NOT NULL, ease INTEGER NOT NULL, ivl INTEGER NOT NULL, lastIvl INTEGER NOT NULL, factor INTEGER NOT NULL, time INTEGER NOT NULL, type INTEGER NOT NULL)");
-            stmt.execute(
-                    "CREATE TABLE IF NOT EXISTS graves (usn INTEGER NOT NULL, oid INTEGER NOT NULL, type INTEGER NOT NULL)");
-
-            // Initialize 'col' table with default structure
-            long now = System.currentTimeMillis() / 1000;
-            stmt.execute("INSERT INTO col (id, crt, mod, scm, ver, dty, usn, ls, conf, models, decks, dconf, tags) " +
-                    "VALUES (1, " + now + ", " + now + ", " + now + ", 11, 0, 0, 0, '{}', '{}', '{}', '{}', '{}')");
-        }
-    }
-
-    private byte[] backUpMemoryDatabase() {
-        java.nio.file.Path tempFile = null;
-        try {
-            tempFile = java.nio.file.Files.createTempFile("anki4j_export", ".db");
-            try (java.sql.Statement stmt = connection.createStatement()) {
-                stmt.executeUpdate("backup to " + tempFile.toAbsolutePath());
-            }
-            return java.nio.file.Files.readAllBytes(tempFile);
-        } catch (Exception e) {
-            throw new AnkiException("Failed to backup memory database", e);
-        } finally {
-            if (tempFile != null) {
-                try {
-                    java.nio.file.Files.deleteIfExists(tempFile);
-                } catch (IOException ignored) {
-                }
-            }
-        }
     }
 }
