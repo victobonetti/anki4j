@@ -88,31 +88,10 @@ public final class Anki4j implements AnkiCollection {
         }
     }
 
-    private static final long MAX_PKG_SIZE_BYTES;
-
-    static {
-        long limitKb = 1000; // Default 1000 KB
-        try {
-            String env = System.getenv("ANKI4J_MAX_PKG_SIZE_KB");
-            if (env != null) {
-                limitKb = Long.parseLong(env);
-            }
-        } catch (NumberFormatException e) {
-            logger.warn("Invalid format for ANKI4J_MAX_PKG_SIZE_KB, using default: {}", limitKb);
-        }
-        MAX_PKG_SIZE_BYTES = limitKb * 1024;
-    }
-
     // ... (existing helper methods)
 
     public static Anki4j read(byte[] data) {
         logger.info("Opening Anki collection from bytes (length: {})", data.length);
-
-        if (data.length > MAX_PKG_SIZE_BYTES) {
-            logger.warn("File size exceeds maximum allowed limit of {} KB", MAX_PKG_SIZE_BYTES / 1024);
-            throw new AnkiException(
-                    "File size exceeds maximum allowed limit of " + (MAX_PKG_SIZE_BYTES / 1024) + " KB");
-        }
 
         try {
             // 1. Extract database from bytes

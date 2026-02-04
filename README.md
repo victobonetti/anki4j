@@ -132,20 +132,6 @@ try (AnkiCollection anki = Anki4j.create()) {
 } // Resources cleaned up automatically
 ```
 
-## ⚙️ Configuration
-
-Anki4j has a safety limit for the maximum size of `.apkg` files it will process to prevent excessive memory usage.
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `ANKI4J_MAX_PKG_SIZE_KB` | `1000` (1MB) | Maximum allowed size for the entire `.apkg` file in Kilobytes. |
-
-If you need to process larger decks, set this environment variable before running your application:
-
-```bash
-export ANKI4J_MAX_PKG_SIZE_KB=50000 # Allow up to 50MB
-```
-
 ## API Reference
 
 ### AnkiCollection (Interface)
