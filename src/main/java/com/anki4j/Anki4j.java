@@ -109,7 +109,7 @@ public final class Anki4j implements AnkiCollection {
         logger.info("Opening Anki collection from bytes (length: {})", data.length);
 
         if (data.length > MAX_PKG_SIZE_BYTES) {
-            logger.warn("File size exceeds maximum allowed limit of {} KB", MAX_PKG_SIZE_BYTES);
+            logger.warn("File size exceeds maximum allowed limit of {} KB", MAX_PKG_SIZE_BYTES / 1024);
             throw new AnkiException(
                     "File size exceeds maximum allowed limit of " + (MAX_PKG_SIZE_BYTES / 1024) + " KB");
         }
