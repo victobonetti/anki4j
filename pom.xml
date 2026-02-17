@@ -51,6 +51,17 @@
     </dependency>
   </dependencies>
 
+  <repositories>
+    <repository>
+        <id>github</id>
+        <name>GitHub Packages</name>
+        <url>https://maven.pkg.github.com/victobonetti/anki4j</url>
+        <snapshots>
+            <enabled>true</enabled>
+        </snapshots>
+    </repository>
+  </repositories>
+
   <build>
     <plugins>
       <plugin>
